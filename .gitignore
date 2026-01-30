@@ -1,0 +1,12 @@
+.DS_Store
+
+# LLVM forks live as separate repos/submodules
+llvm-project/
+8085-llvm/
+i8085-trace/
+
+# Local build artifacts
+/tooling/build/
+/tooling/smoke-build/
+/sim/candidates/
+

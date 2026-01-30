@@ -1,0 +1,60 @@
+     VMA      LMA     Size Align Out     In      Symbol
+       0        0       3f     1 .vectors
+       0        0       3f     1         /Users/andrewpullin/personal/llvm-8085/tooling/examples/fib/build-o0/crt0.o:(.vectors)
+       0        0        0     1                 __vector_table
+    8000     8000      1cc     4 .text
+    8000     8000        0     4         /Users/andrewpullin/personal/llvm-8085/tooling/examples/fib/build-o0/crt0.o:(.text)
+    8000     8000       3b     1         /Users/andrewpullin/personal/llvm-8085/tooling/examples/fib/build-o0/crt0.o:(.text.startup)
+    8000     8000        0     1                 _start
+    8011     8011        0     1                 copy_data
+    801b     801b        0     1                 zero_bss
+    8028     8028        0     1                 clear_bss
+    8030     8030        0     1                 call_main
+    8033     8033        0     1                 halt_loop
+    8037     8037        0     1                 isr_rst1
+    8037     8037        0     1                 isr_rst2
+    8037     8037        0     1                 isr_rst3
+    8037     8037        0     1                 isr_rst4
+    8037     8037        0     1                 isr_trap
+    8037     8037        0     1                 isr_rst5
+    8037     8037        0     1                 isr_rst55
+    8037     8037        0     1                 isr_rst6
+    8037     8037        0     1                 isr_rst65
+    8037     8037        0     1                 isr_rst7
+    8037     8037        0     1                 isr_rst75
+    8037     8037        0     1                 default_isr
+    803c     803c      190     4         /Users/andrewpullin/personal/llvm-8085/tooling/examples/fib/build-o0/fib.o:(.text)
+    803c     803c        0     1                 LBB0_0
+    803c     803c      190     1                 main
+    80b1     80b1        0     1                 LBB0_1
+    80d8     80d8        0     1                 LBB0_2
+    80e6     80e6        0     1                 LBB0_3
+    80f0     80f0        0     1                 LBB0_4
+    80fa     80fa        0     1                 LBB0_5
+    81a3     81a3        0     1                 LBB0_6
+    81c2     81c2        0     1                 LBB0_7
+    81cc     81cc        0     1 . = ALIGN(2)
+    81cc     81cc        0     1 _etext = .
+      40       40        0     1 .data
+      40       40        0     1         . = ALIGN(2)
+      40       40        0     1         _sdata = .
+      40       40        0     1         . = ALIGN(2)
+      40       40        0     1         _edata = .
+      40       40        0     1 _sidata = LOADADDR(.data)
+      40       40        0     1 .bss
+      40       40        0     1         . = ALIGN(2)
+      40       40        0     1         _sbss = .
+      40       40        0     1         . = ALIGN(2)
+      40       40        0     1         _ebss = .
+      40       40        0     1 _end = .
+      40       40        0     1 PROVIDE(_data_size = _edata - _sdata)
+      40       40        0     1 PROVIDE(_bss_size = _ebss - _sbss)
+      40       40        0     1 PROVIDE(_estack = ORIGIN(RAM) + LENGTH(RAM))
+       0        0       6d     1 .comment
+       0        0       6d     1         <internal>:(.comment)
+       0        0      280     4 .symtab
+       0        0      280     4         <internal>:(.symtab)
+       0        0       3e     1 .shstrtab
+       0        0       3e     1         <internal>:(.shstrtab)
+       0        0      148     1 .strtab
+       0        0      148     1         <internal>:(.strtab)
