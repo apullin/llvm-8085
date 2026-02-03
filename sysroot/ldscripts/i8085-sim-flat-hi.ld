@@ -1,4 +1,4 @@
-/* Flat 64K map for simulator smoke tests. */
+/* Flat 64K map for simulator tests with a higher testdump address. */
 OUTPUT_FORMAT(elf32-i8085)
 ENTRY(_start)
 
@@ -43,9 +43,9 @@ SECTIONS
 
   _end = .;
 
-  ASSERT(_end <= 0xFE00, "sim-flat: sections overlap .testdump")
+  ASSERT(_end <= 0xFF40, "sim-flat-hi: sections overlap .testdump")
 
-  . = 0xFF00;
+  . = 0xFF40;
   .testdump (NOLOAD) : {
     *(.testdump)
   }
