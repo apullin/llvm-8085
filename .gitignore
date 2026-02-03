@@ -9,4 +9,4 @@ i8085-trace/
 /tooling/build/
 /tooling/smoke-build/
 /sim/candidates/
-
+/libi8085/build/
