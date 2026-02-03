@@ -64,11 +64,14 @@ Last updated: 2026-01-30
 - [x] End-to-end clang -> asm -> link smoke tests
 - [x] Port I/O + interrupt/RETI + HLT edge cases
 - [x] ABI stress expansions (varargs + sret + byval under O2)
+- [x] Deep recursion stack stress example
 
 ### Tooling
 - [x] llvm-objdump/readobj coverage for i8085
 - [x] llvm-mc regression tests for edge cases
-- [ ] Coverage/export support from simulator (future)
+- [x] Coverage/export support from simulator (JSON pc/opcode hits)
+- [x] ABI torture example + expected memory dump verification
+- [x] Optimization sanity example (no volatile) with summary halt check
 
 ## Current Tranche (2026-01-30)
 - [x] Correctness: port I/O + interrupt/RETI + HLT edge cases
