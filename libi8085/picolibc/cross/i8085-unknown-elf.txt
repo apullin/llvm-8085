@@ -1,10 +1,10 @@
 [binaries]
-c = ['/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/clang', '--target=i8085-unknown-elf', '-nostdlib', '-ffreestanding']
-cpp = ['/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/clang', '--target=i8085-unknown-elf', '-nostdlib', '-ffreestanding']
-ar = '/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/llvm-ar'
-nm = '/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/llvm-nm'
-ranlib = '/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/llvm-ranlib'
-strip = '/Users/andrewpullin/personal/llvm-8085/tooling/build/build-clang-8085/bin/llvm-strip'
+c = ['/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/clang', '--target=i8085-unknown-elf', '-nostdlib', '-ffreestanding']
+cpp = ['/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/clang', '--target=i8085-unknown-elf', '-nostdlib', '-ffreestanding']
+ar = '/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/llvm-ar'
+nm = '/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/llvm-nm'
+ranlib = '/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/llvm-ranlib'
+strip = '/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/llvm-strip'
 
 [host_machine]
 system = 'none'
