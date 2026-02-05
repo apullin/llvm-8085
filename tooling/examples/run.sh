@@ -61,6 +61,7 @@ case "${EXAMPLE}" in
     ;;
   opt_sanity)
     DUMP_RANGE=""
+    MAX_STEPS="2000000"
     ;;
   deep_recursion)
     DUMP_RANGE="0x0400:4"

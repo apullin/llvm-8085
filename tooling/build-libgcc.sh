@@ -175,6 +175,18 @@ for helper in addsf3 subsf3 negsf2 mulsf3 divsf3; do
     "${tmpdir}/${helper}.bc" -o "${OUT_DIR}/${helper}.o"
 done
 
+# Simple memory operations (memcpy, memset, memmove) required by the
+# compiler even in freestanding mode.  Hand-written assembly to avoid
+# bootstrapping issues with the C compiler.
+for helper in memops; do
+  src="${LIBI8085_BUILTINS_DIR}/${helper}.S"
+  if [[ ! -f "${src}" ]]; then
+    echo "missing source: ${src}" >&2
+    exit 1
+  fi
+  "${CLANG}" -target i8085-unknown-elf -c "${src}" -o "${OUT_DIR}/${helper}.o"
+done
+
 for helper in comparesf2 floatdisf floatundisf; do
   src="${LIBI8085_BUILTINS_DIR}/${helper}.c"
   if [[ ! -f "${src}" ]]; then
