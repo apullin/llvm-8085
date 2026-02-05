@@ -6,7 +6,7 @@ EXAMPLE="${1:-}"
 
 if [[ -z "${EXAMPLE}" ]]; then
   echo "Usage: $0 <example>"
-  echo "Examples: fib, q7_8_matmul, abi_torture, opt_sanity, deep_recursion"
+  echo "Examples: fib, q7_8_matmul, abi_torture, opt_sanity, deep_recursion, crc32, bubble_sort, json_parse"
   exit 1
 fi
 
@@ -17,6 +17,8 @@ OBJCOPY="${LLVM_OBJCOPY:-${OBJCOPY_DEFAULT}}"
 TRACE="${TRACE:-$ROOT/i8085-trace/build/i8085-trace}"
 CRT="${CRT:-$ROOT/sysroot/crt/crt0.S}"
 LINKER_DEFAULT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom.ld"
+LINKER_INPUT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input.ld"
+LINKER_INPUT48="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input48.ld"
 LINKER_LARGE="$ROOT/sysroot/ldscripts/i8085-16kram-48krom.ld"
 LINKER="${LINKER:-}"
 LIBGCC="${LIBGCC:-$ROOT/sysroot/lib/libgcc.a}"
@@ -60,12 +62,24 @@ case "${EXAMPLE}" in
     MAX_STEPS="200000"
     ;;
   opt_sanity)
-    DUMP_RANGE=""
+    DUMP_RANGE="0x0200:4"
     MAX_STEPS="2000000"
     ;;
   deep_recursion)
     DUMP_RANGE="0x0400:4"
     MAX_STEPS="500000"
+    ;;
+  crc32)
+    DUMP_RANGE="0x0200:4"
+    MAX_STEPS="2000000"
+    ;;
+  bubble_sort)
+    DUMP_RANGE="0x0200:32"
+    MAX_STEPS="2000000"
+    ;;
+  json_parse)
+    DUMP_RANGE="0x0200:4"
+    MAX_STEPS="2000000"
     ;;
   *)
     echo "Unknown example: ${EXAMPLE}"
@@ -74,11 +88,24 @@ case "${EXAMPLE}" in
 esac
 
 if [[ -z "${LINKER}" ]]; then
-  if [[ "${EXAMPLE}" == "abi_torture" && -f "${LINKER_LARGE}" ]]; then
-    LINKER="${LINKER_LARGE}"
-  else
-    LINKER="${LINKER_DEFAULT}"
-  fi
+  case "${EXAMPLE}" in
+    abi_torture)
+      if [[ -f "${LINKER_LARGE}" ]]; then
+        LINKER="${LINKER_LARGE}"
+      else
+        LINKER="${LINKER_DEFAULT}"
+      fi
+      ;;
+    q7_8_matmul|crc32|bubble_sort|opt_sanity)
+      LINKER="${LINKER_INPUT}"
+      ;;
+    json_parse)
+      LINKER="${LINKER_INPUT48}"
+      ;;
+    *)
+      LINKER="${LINKER_DEFAULT}"
+      ;;
+  esac
 fi
 
 mkdir -p "${OUTDIR}"
@@ -100,8 +127,19 @@ fi
 "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin "${OPTFLAGS}" \
   -c "${SRC}" -o "${OUTDIR}/${EXAMPLE}.o"
 
+# Check for extra input files
+EXTRA_OBJ=()
+EXTRA_SRC="${ROOT}/tooling/examples/${EXAMPLE}/${EXAMPLE}_inputs.c"
+if [[ -f "${EXTRA_SRC}" ]]; then
+  "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin "${OPTFLAGS}" \
+    -c "${EXTRA_SRC}" -o "${OUTDIR}/${EXAMPLE}_inputs.o"
+  EXTRA_OBJ=("${OUTDIR}/${EXAMPLE}_inputs.o")
+fi
+
+LIBC="${LIBC:-$ROOT/sysroot/lib/libc.a}"
+
 "${LLD}" -m i8085elf --gc-sections -T "${LINKER}" -Map "${OUTDIR}/${EXAMPLE}.map" \
-  -o "${OUTDIR}/${EXAMPLE}.elf" "${OUTDIR}/crt0.o" "${OUTDIR}/${EXAMPLE}.o" "${LIBGCC}"
+  -o "${OUTDIR}/${EXAMPLE}.elf" "${OUTDIR}/crt0.o" "${OUTDIR}/${EXAMPLE}.o" "${EXTRA_OBJ[@]}" "${LIBGCC}" "${LIBC}" "${LIBGCC}"
 
 "${OBJCOPY}" -O binary "${OUTDIR}/${EXAMPLE}.elf" "${OUTDIR}/${EXAMPLE}.bin"
 
@@ -110,7 +148,7 @@ TRACE_ARGS=("-e" "0x0000" "-l" "0x0000" "-n" "${MAX_STEPS}")
 if [[ -n "${DUMP_RANGE}" ]]; then
   TRACE_ARGS+=("-d" "${DUMP_RANGE}")
 fi
-if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" ]]; then
+if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
   TRACE_ARGS+=("-S" "-q")
 fi
 if [[ -n "${COV:-}" ]]; then
@@ -119,7 +157,7 @@ fi
 
 DUMP_LOG="${OUTDIR}/${EXAMPLE}.dump.txt"
 SUMMARY_LOG=""
-if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" ]]; then
+if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
   SUMMARY_LOG="${OUTDIR}/${EXAMPLE}.summary.json"
 fi
 
@@ -135,9 +173,6 @@ if [[ -f "${EXPECTED}" ]]; then
   "${ROOT}/tooling/examples/verify_dump.py" --dump "${DUMP_LOG}" --expected "${EXPECTED}"
 fi
 
-if [[ "${EXAMPLE}" == "opt_sanity" ]]; then
-  "${ROOT}/tooling/examples/verify_summary.py" --summary "${SUMMARY_LOG}" --expect-halt hlt
-fi
-if [[ "${EXAMPLE}" == "deep_recursion" ]]; then
+if [[ "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
   "${ROOT}/tooling/examples/verify_summary.py" --summary "${SUMMARY_LOG}" --expect-halt hlt
 fi

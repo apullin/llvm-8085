@@ -18,7 +18,8 @@ CRT="${CRT:-$ROOT/sysroot/crt/crt0.S}"
 LIBGCC="${LIBGCC:-$ROOT/sysroot/lib/libgcc.a}"
 LIBC="${LIBC:-$ROOT/sysroot/lib/libc.a}"
 LINKER_DEFAULT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom.ld"
-LINKER_Q78="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input.ld"
+LINKER_INPUT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input.ld"
+LINKER_INPUT48="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input48.ld"
 LINKER_LARGE="$ROOT/sysroot/ldscripts/i8085-16kram-48krom.ld"
 
 # Check dependencies
@@ -38,7 +39,7 @@ done
 # Benchmarks to run (can be overridden via args)
 BENCHMARKS=("$@")
 if [[ ${#BENCHMARKS[@]} -eq 0 ]]; then
-  BENCHMARKS=(fib q7_8_matmul opt_sanity deep_recursion)
+  BENCHMARKS=(fib q7_8_matmul opt_sanity deep_recursion crc32 bubble_sort json_parse)
 fi
 
 # Optimization levels to test
@@ -56,26 +57,38 @@ MAX_STEPS[fib]="10000"
 DUMP_RANGE[q7_8_matmul]="0x0200:8"
 MAX_STEPS[q7_8_matmul]="500000"
 
-DUMP_RANGE[opt_sanity]=""
+DUMP_RANGE[opt_sanity]="0x0200:4"
 MAX_STEPS[opt_sanity]="2000000"
 
 DUMP_RANGE[deep_recursion]="0x0400:4"
 MAX_STEPS[deep_recursion]="500000"
 
+DUMP_RANGE[crc32]="0x0200:4"
+MAX_STEPS[crc32]="2000000"
+
+DUMP_RANGE[bubble_sort]="0x0200:32"
+MAX_STEPS[bubble_sort]="2000000"
+
+DUMP_RANGE[json_parse]="0x0200:4"
+MAX_STEPS[json_parse]="2000000"
+
 # Linker scripts
 LINKER_SCRIPT[fib]="${LINKER_DEFAULT}"
-LINKER_SCRIPT[q7_8_matmul]="${LINKER_DEFAULT}"
-if [[ -f "${LINKER_Q78}" ]]; then
-  LINKER_SCRIPT[q7_8_matmul]="${LINKER_Q78}"
-fi
-LINKER_SCRIPT[opt_sanity]="${LINKER_DEFAULT}"
+LINKER_SCRIPT[q7_8_matmul]="${LINKER_INPUT}"
+LINKER_SCRIPT[opt_sanity]="${LINKER_INPUT}"
 LINKER_SCRIPT[deep_recursion]="${LINKER_DEFAULT}"
+LINKER_SCRIPT[crc32]="${LINKER_INPUT}"
+LINKER_SCRIPT[bubble_sort]="${LINKER_INPUT}"
+LINKER_SCRIPT[json_parse]="${LINKER_INPUT48}"
 
 # Expected output files
 EXPECTED_FILE[fib]="$ROOT/tooling/examples/fib/expected.hex"
 EXPECTED_FILE[q7_8_matmul]=""
 EXPECTED_FILE[opt_sanity]=""
 EXPECTED_FILE[deep_recursion]=""
+EXPECTED_FILE[crc32]=""
+EXPECTED_FILE[bubble_sort]=""
+EXPECTED_FILE[json_parse]=""
 
 # Output format
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-table}"  # table or csv

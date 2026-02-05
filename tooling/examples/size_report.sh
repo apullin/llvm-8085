@@ -35,6 +35,7 @@ OBJDUMP="${LLVM_OBJDUMP:-$(pick_tool "${OBJDUMP_DEFAULT}" "${OBJDUMP_FALLBACK}")
 CRT="${CRT:-$ROOT/sysroot/crt/crt0.S}"
 LIBGCC="${LIBGCC:-$ROOT/sysroot/lib/libgcc.a}"
 LINKER_DEFAULT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom.ld"
+LINKER_Q78="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input.ld"
 LINKER_LARGE="$ROOT/sysroot/ldscripts/i8085-16kram-48krom.ld"
 
 if [[ ! -x "${CLANG}" || ! -x "${LLD}" || ! -x "${SIZE}" || ! -x "${OBJDUMP}" ]]; then
@@ -58,7 +59,9 @@ for ex in "${EXAMPLES[@]}"; do
   fi
 
   linker="${LINKER_DEFAULT}"
-  if [[ "${ex}" == "abi_torture" && -f "${LINKER_LARGE}" ]]; then
+  if [[ "${ex}" == "q7_8_matmul" && -f "${LINKER_Q78}" ]]; then
+    linker="${LINKER_Q78}"
+  elif [[ "${ex}" == "abi_torture" && -f "${LINKER_LARGE}" ]]; then
     linker="${LINKER_LARGE}"
   fi
 
@@ -72,8 +75,16 @@ for ex in "${EXAMPLES[@]}"; do
     "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin -${opt} \
       -c "${src}" -o "${outdir}/${ex}.o"
 
+    extra_obj=()
+    extra_src="${ROOT}/tooling/examples/${ex}/${ex}_inputs.c"
+    if [[ -f "${extra_src}" ]]; then
+      "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin -${opt} \
+        -c "${extra_src}" -o "${outdir}/${ex}_inputs.o"
+      extra_obj=("${outdir}/${ex}_inputs.o")
+    fi
+
     "${LLD}" -m i8085elf --gc-sections -T "${linker}" -Map "${outdir}/${ex}.map" \
-      -o "${outdir}/${ex}.elf" "${outdir}/crt0.o" "${outdir}/${ex}.o" "${LIBGCC}"
+      -o "${outdir}/${ex}.elf" "${outdir}/crt0.o" "${outdir}/${ex}.o" "${extra_obj[@]}" "${LIBGCC}"
 
     size_line="$("${SIZE}" -A "${outdir}/${ex}.elf" | awk '
       $1 == ".text" { text = $2 }
