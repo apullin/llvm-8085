@@ -111,9 +111,11 @@ __unordsf2:
 	call	.Lcheck_nan_regs
 	jnz	.Lunord_yes
 	lxi	b, 0
+	lxi	d, 0
 	ret
 .Lunord_yes:
 	lxi	b, 1
+	lxi	d, 0
 	ret
 	.size	__unordsf2, .-__unordsf2
 
@@ -151,6 +153,7 @@ __cmpsf2:
 	jmp	.Lcmp_body
 .Lcmp_plus1:
 	lxi	b, 1
+	lxi	d, 0
 	ret
 	.size	__lesf2, .-__lesf2
 
@@ -178,6 +181,7 @@ __gtsf2:
 	jmp	.Lcmp_body
 .Lcmp_minus1:
 	lxi	b, 0xFFFF
+	lxi	d, 0xFFFF
 	ret
 	.size	__gesf2, .-__gesf2
 
@@ -271,6 +275,7 @@ __gtsf2:
 
 .Lcmp_eq:
 	lxi	b, 0
+	lxi	d, 0
 	ret
 
 .Lcmp_ne:
@@ -297,9 +302,11 @@ __gtsf2:
 	jnz	.Lcmp_ret_m1	; a negative -> a < b
 .Lcmp_ret_p1:
 	lxi	b, 1
+	lxi	d, 0
 	ret
 .Lcmp_ret_m1:
 	lxi	b, 0xFFFF
+	lxi	d, 0xFFFF
 	ret
 
 ; ============================================================
