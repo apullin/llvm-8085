@@ -233,3 +233,85 @@ memmove:
 	mov	b, m
 	ret
 	.size	memmove, .-memmove
+
+	.globl	memcmp
+	.type	memcmp,@function
+memcmp:
+	; int memcmp(const void *s1, const void *s2, size_t n)
+	; [SP+2..3] = s1, [SP+4..5] = s2, [SP+6..7] = n
+	; Returns i16 in BC: <0 if s1<s2, 0 if equal, >0 if s1>s2
+	;
+	; Strategy: HL = s1, DE = s2, counter on stack.
+	; Compare using MOV A,M (s1) and LDAX D (s2).
+
+	; Load n into BC (temporary)
+	lxi	h, 6
+	dad	sp
+	mov	c, m		; n low
+	inx	h
+	mov	b, m		; n high
+
+	; Check if n == 0
+	mov	a, b
+	ora	c
+	jz	.Lmemcmp_equal
+
+	; Push n as our counter
+	push	b		; [SP] = n
+
+	; Load s2 into DE  (stack offsets shifted by 2 from push)
+	lxi	h, 6
+	dad	sp
+	mov	e, m		; s2 low
+	inx	h
+	mov	d, m		; s2 high
+
+	; Load s1 into HL
+	lxi	h, 4
+	dad	sp
+	mov	a, m		; s1 low
+	inx	h
+	mov	h, m		; s1 high
+	mov	l, a		; HL = s1
+
+	; HL = s1, DE = s2, counter at [SP+0..1]
+.Lmemcmp_loop:
+	mov	a, m		; A = *s1
+	push	psw		; save *s1 and flags
+	ldax	d		; A = *s2
+	mov	b, a		; B = *s2
+	pop	psw		; A = *s1
+	sub	b		; A = *s1 - *s2
+	jnz	.Lmemcmp_diff
+
+	; Bytes are equal, advance pointers
+	inx	h		; s1++
+	inx	d		; s2++
+
+	; Decrement counter on stack
+	pop	b		; BC = counter
+	dcx	b
+	mov	a, b
+	ora	c
+	jz	.Lmemcmp_eq_pop	; counter == 0, all equal
+	push	b		; push counter back
+	jmp	.Lmemcmp_loop
+
+.Lmemcmp_diff:
+	; A = *s1 - *s2 (non-zero). Clean up stack (counter).
+	pop	b		; discard counter
+	jc	.Lmemcmp_less
+	; *s1 > *s2: return 1 in BC
+	lxi	b, 1
+	ret
+.Lmemcmp_less:
+	; *s1 < *s2: return -1 in BC
+	lxi	b, 0xFFFF
+	ret
+
+.Lmemcmp_eq_pop:
+	; All bytes equal (counter already popped)
+.Lmemcmp_equal:
+	lxi	b, 0
+	ret
+	.size	memcmp, .-memcmp

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TOOLBIN="${TOOLBIN:-$ROOT/tooling/build/build-clang-8085/bin}"
+TOOLBIN="${TOOLBIN:-$ROOT/llvm-project/build-clang-8085/bin}"
 SYSROOT="${SYSROOT:-$ROOT/sysroot}"
 
 CLANG="${TOOLBIN}/clang"
@@ -26,10 +26,7 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
 float_sources_o0=(
-  fixsfsi
-  fixunssfsi
-  floatsisf
-  floatunsisf
+  # fixsfsi, fixunssfsi, floatsisf, floatunsisf — now hand-written in softfp.S
 )
 
 float_sources_o0_softfp=(
@@ -40,23 +37,14 @@ float_sources_o0_softfp=(
 float_sources_o1=(
 )
 float_sources_os=(
-  fp_mode
+  # fp_mode — now hand-written in softfp.S (__fe_getround, __fe_raise_inexact)
 )
 
 int_sources_o0=(
-  muldi3
+  # muldi3 -- now provided by hand-written assembly in int_mul.S
 )
 
 int_sources_os=(
-  ashldi3
-  ashrdi3
-  clzdi2
-  cmpdi2
-  ctzdi2
-  ctzsi2
-  lshrdi3
-  negdi2
-  ucmpdi2
 )
 
 for base in "${float_sources_o0[@]}"; do
@@ -146,39 +134,18 @@ else
   exit 1
 fi
 
-# Target-specific helpers.
-for helper in int_mul int_udiv int_sdiv int_divdi3; do
-  src="${LIBI8085_BUILTINS_DIR}/${helper}.c"
-  if [[ ! -f "${src}" ]]; then
-    echo "missing source: ${src}" >&2
-    exit 1
-  fi
-  # O0 avoids long-running llc compiles and keeps helpers simple.
-  "${CLANG}" -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin \
-    -nostdlib -I "${BUILTINS_DIR}" -I "${LIBI8085_BUILTINS_DIR}" \
-    -emit-llvm -c "${src}" -o "${tmpdir}/${helper}.bc"
-  "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
-    "${tmpdir}/${helper}.bc" -o "${OUT_DIR}/${helper}.o"
-done
+# Note: 64-bit division (int_divdi3) is now hand-written assembly in int_divdi3.S,
+# assembled in the hand-written assembly loop below.
 
-# Local soft-float helpers built outside compiler-rt.
-for helper in addsf3 subsf3 negsf2 mulsf3 divsf3; do
-  src="${LIBI8085_BUILTINS_DIR}/${helper}.c"
-  if [[ ! -f "${src}" ]]; then
-    echo "missing source: ${src}" >&2
-    exit 1
-  fi
-  "${CLANG}" -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin \
-    -nostdlib -I "${LIBI8085_BUILTINS_DIR}" -I "${BUILTINS_DIR}" \
-    -emit-llvm -c "${src}" -o "${tmpdir}/${helper}.bc"
-  "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
-    "${tmpdir}/${helper}.bc" -o "${OUT_DIR}/${helper}.o"
-done
+# Local soft-float helpers — now hand-written in softfp.S:
+# addsf3, subsf3, negsf2, mulsf3, divsf3, comparesf2, fixsfsi, fixunssfsi,
+# floatsisf, floatunsisf, fe_getround, fe_raise_inexact
 
-# Simple memory operations (memcpy, memset, memmove) required by the
-# compiler even in freestanding mode.  Hand-written assembly to avoid
-# bootstrapping issues with the C compiler.
-for helper in memops; do
+# Hand-written assembly helpers: memory operations, integer multiply,
+# integer division, 64-bit shifts, and 64-bit add/sub.
+# Assembly avoids bootstrapping issues and gives much better performance
+# than the C versions compiled through the i8085 backend.
+for helper in memops int_mul int_div int_shift int_shift64 int_arith64 int_divdi3 ctzsi2 ctzdi2 clzdi2 popcountsi2 int_rotate int_rotate64 int_fshl stringops softfp; do
   src="${LIBI8085_BUILTINS_DIR}/${helper}.S"
   if [[ ! -f "${src}" ]]; then
     echo "missing source: ${src}" >&2
@@ -187,7 +154,7 @@ for helper in memops; do
   "${CLANG}" -target i8085-unknown-elf -c "${src}" -o "${OUT_DIR}/${helper}.o"
 done
 
-for helper in comparesf2 floatdisf floatundisf; do
+for helper in floatdisf floatundisf; do
   src="${LIBI8085_BUILTINS_DIR}/${helper}.c"
   if [[ ! -f "${src}" ]]; then
     echo "missing source: ${src}" >&2
