@@ -6,7 +6,7 @@ EXAMPLE="${1:-}"
 
 if [[ -z "${EXAMPLE}" ]]; then
   echo "Usage: $0 <example>"
-  echo "Examples: fib, q7_8_matmul, abi_torture, opt_sanity, deep_recursion, crc32, bubble_sort, json_parse"
+  echo "Examples: fib, q7_8_matmul, abi_torture, opt_sanity, deep_recursion, crc32, crc32_lut, bubble_sort, json_parse, mul_torture, bitops_torture"
   exit 1
 fi
 
@@ -73,6 +73,10 @@ case "${EXAMPLE}" in
     DUMP_RANGE="0x0200:4"
     MAX_STEPS="2000000"
     ;;
+  crc32_lut)
+    DUMP_RANGE="0x0200:8"
+    MAX_STEPS="20000000"
+    ;;
   bubble_sort)
     DUMP_RANGE="0x0200:32"
     MAX_STEPS="2000000"
@@ -80,6 +84,18 @@ case "${EXAMPLE}" in
   json_parse)
     DUMP_RANGE="0x0200:4"
     MAX_STEPS="2000000"
+    ;;
+  mul_torture)
+    DUMP_RANGE="0x0200:130"
+    MAX_STEPS="5000000"
+    ;;
+  div_torture)
+    DUMP_RANGE="0x0200:256"
+    MAX_STEPS="50000000"
+    ;;
+  bitops_torture)
+    DUMP_RANGE="0x0200:4"
+    MAX_STEPS="5000000"
     ;;
   *)
     echo "Unknown example: ${EXAMPLE}"
@@ -89,14 +105,14 @@ esac
 
 if [[ -z "${LINKER}" ]]; then
   case "${EXAMPLE}" in
-    abi_torture)
+    abi_torture|mul_torture|div_torture|bitops_torture)
       if [[ -f "${LINKER_LARGE}" ]]; then
         LINKER="${LINKER_LARGE}"
       else
         LINKER="${LINKER_DEFAULT}"
       fi
       ;;
-    q7_8_matmul|crc32|bubble_sort|opt_sanity)
+    q7_8_matmul|crc32|crc32_lut|bubble_sort|opt_sanity)
       LINKER="${LINKER_INPUT}"
       ;;
     json_parse)
@@ -117,10 +133,10 @@ OPTFLAGS="${OPTFLAGS:-}"
 if [[ -z "${OPTFLAGS}" ]]; then
   if [[ "${EXAMPLE}" == "opt_sanity" ]]; then
     OPTFLAGS="-O2"
-  elif [[ "${EXAMPLE}" == "deep_recursion" ]]; then
-    OPTFLAGS="-O0"
   else
-    OPTFLAGS="-Oz"
+    # Use -Os by default. -Oz has known issues with stack frame calculation
+    # for functions with complex stack-passed arguments.
+    OPTFLAGS="-Os"
   fi
 fi
 
@@ -148,7 +164,7 @@ TRACE_ARGS=("-e" "0x0000" "-l" "0x0000" "-n" "${MAX_STEPS}")
 if [[ -n "${DUMP_RANGE}" ]]; then
   TRACE_ARGS+=("-d" "${DUMP_RANGE}")
 fi
-if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
+if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "crc32_lut" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" || "${EXAMPLE}" == "mul_torture" || "${EXAMPLE}" == "div_torture" || "${EXAMPLE}" == "bitops_torture" ]]; then
   TRACE_ARGS+=("-S" "-q")
 fi
 if [[ -n "${COV:-}" ]]; then
@@ -157,7 +173,7 @@ fi
 
 DUMP_LOG="${OUTDIR}/${EXAMPLE}.dump.txt"
 SUMMARY_LOG=""
-if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
+if [[ "${EXAMPLE}" == "abi_torture" || "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "crc32_lut" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" || "${EXAMPLE}" == "mul_torture" || "${EXAMPLE}" == "div_torture" || "${EXAMPLE}" == "bitops_torture" ]]; then
   SUMMARY_LOG="${OUTDIR}/${EXAMPLE}.summary.json"
 fi
 
@@ -173,6 +189,6 @@ if [[ -f "${EXPECTED}" ]]; then
   "${ROOT}/tooling/examples/verify_dump.py" --dump "${DUMP_LOG}" --expected "${EXPECTED}"
 fi
 
-if [[ "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" ]]; then
+if [[ "${EXAMPLE}" == "opt_sanity" || "${EXAMPLE}" == "deep_recursion" || "${EXAMPLE}" == "crc32" || "${EXAMPLE}" == "crc32_lut" || "${EXAMPLE}" == "bubble_sort" || "${EXAMPLE}" == "json_parse" || "${EXAMPLE}" == "mul_torture" || "${EXAMPLE}" == "div_torture" || "${EXAMPLE}" == "bitops_torture" ]]; then
   "${ROOT}/tooling/examples/verify_summary.py" --summary "${SUMMARY_LOG}" --expect-halt hlt
 fi

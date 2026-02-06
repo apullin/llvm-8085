@@ -39,7 +39,7 @@ done
 # Benchmarks to run (can be overridden via args)
 BENCHMARKS=("$@")
 if [[ ${#BENCHMARKS[@]} -eq 0 ]]; then
-  BENCHMARKS=(fib q7_8_matmul opt_sanity deep_recursion crc32 bubble_sort json_parse)
+  BENCHMARKS=(fib q7_8_matmul opt_sanity deep_recursion crc32 crc32_lut bubble_sort json_parse mul_torture div_torture bitops_torture string_torture float_torture fp_bench)
 fi
 
 # Optimization levels to test
@@ -66,11 +66,32 @@ MAX_STEPS[deep_recursion]="500000"
 DUMP_RANGE[crc32]="0x0200:4"
 MAX_STEPS[crc32]="2000000"
 
+DUMP_RANGE[crc32_lut]="0x0200:8"
+MAX_STEPS[crc32_lut]="20000000"
+
 DUMP_RANGE[bubble_sort]="0x0200:32"
 MAX_STEPS[bubble_sort]="2000000"
 
 DUMP_RANGE[json_parse]="0x0200:4"
 MAX_STEPS[json_parse]="2000000"
+
+DUMP_RANGE[mul_torture]="0x0200:130"
+MAX_STEPS[mul_torture]="5000000"
+
+DUMP_RANGE[div_torture]="0x0200:256"
+MAX_STEPS[div_torture]="50000000"
+
+DUMP_RANGE[bitops_torture]="0x0200:4"
+MAX_STEPS[bitops_torture]="5000000"
+
+DUMP_RANGE[string_torture]="0x0200:4"
+MAX_STEPS[string_torture]="500000"
+
+DUMP_RANGE[float_torture]="0x0200:4"
+MAX_STEPS[float_torture]="5000000"
+
+DUMP_RANGE[fp_bench]="0x0200:12"
+MAX_STEPS[fp_bench]="5000000"
 
 # Linker scripts
 LINKER_SCRIPT[fib]="${LINKER_DEFAULT}"
@@ -78,8 +99,15 @@ LINKER_SCRIPT[q7_8_matmul]="${LINKER_INPUT}"
 LINKER_SCRIPT[opt_sanity]="${LINKER_INPUT}"
 LINKER_SCRIPT[deep_recursion]="${LINKER_DEFAULT}"
 LINKER_SCRIPT[crc32]="${LINKER_INPUT}"
+LINKER_SCRIPT[crc32_lut]="${LINKER_INPUT}"
 LINKER_SCRIPT[bubble_sort]="${LINKER_INPUT}"
 LINKER_SCRIPT[json_parse]="${LINKER_INPUT48}"
+LINKER_SCRIPT[mul_torture]="${LINKER_LARGE}"
+LINKER_SCRIPT[div_torture]="${LINKER_LARGE}"
+LINKER_SCRIPT[bitops_torture]="${LINKER_LARGE}"
+LINKER_SCRIPT[string_torture]="${LINKER_INPUT}"
+LINKER_SCRIPT[float_torture]="${LINKER_DEFAULT}"
+LINKER_SCRIPT[fp_bench]="${LINKER_DEFAULT}"
 
 # Expected output files
 EXPECTED_FILE[fib]="$ROOT/tooling/examples/fib/expected.hex"
@@ -87,8 +115,15 @@ EXPECTED_FILE[q7_8_matmul]=""
 EXPECTED_FILE[opt_sanity]=""
 EXPECTED_FILE[deep_recursion]=""
 EXPECTED_FILE[crc32]=""
+EXPECTED_FILE[crc32_lut]="$ROOT/tooling/examples/crc32_lut/expected.hex"
 EXPECTED_FILE[bubble_sort]=""
 EXPECTED_FILE[json_parse]=""
+EXPECTED_FILE[mul_torture]=""
+EXPECTED_FILE[div_torture]=""
+EXPECTED_FILE[bitops_torture]=""
+EXPECTED_FILE[string_torture]=""
+EXPECTED_FILE[float_torture]=""
+EXPECTED_FILE[fp_bench]=""
 
 # Output format
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-table}"  # table or csv
@@ -102,7 +137,7 @@ build_and_run() {
 
   local src="${ROOT}/tooling/examples/${bench}/${bench}.c"
   local outdir="${ROOT}/tooling/examples/${bench}/build/${opt}"
-  local linker="${LINKER_SCRIPT[$bench]:-$LINKER_DEFAULT}"
+  local linker="${LINKER_OVERRIDE:-${LINKER_SCRIPT[$bench]:-$LINKER_DEFAULT}}"
   local max_steps="${MAX_STEPS[$bench]:-2000}"
   local dump_range="${DUMP_RANGE[$bench]:-}"
 

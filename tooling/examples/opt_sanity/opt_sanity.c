@@ -24,6 +24,8 @@ union Pun {
     uint8_t b[4];
 };
 
+/* Workaround: use explicit shift operations instead of relying on
+ * __rotlsi2, which has a bug with O0 codegen on i8085 */
 static inline uint32_t rotl32(uint32_t v, unsigned s) {
     return (uint32_t)((v << s) | (v >> (32 - s)));
 }
@@ -35,10 +37,19 @@ static uint32_t mix32(uint32_t acc, uint32_t v) {
     return acc;
 }
 
-__attribute__((noinline)) static void halt_ok(void) { __asm__ volatile("hlt"); }
-__attribute__((noinline)) static void fail_loop(void) {
-    for (;;) {
-    }
+__attribute__((noinline, noreturn)) static void halt_ok(void) {
+    __asm__ volatile("hlt");
+    for (;;) { }  /* Never returns - loop after HLT just in case */
+}
+__attribute__((noinline, noreturn)) static void fail_loop(void) {
+    for (;;) { }
+}
+/* Use function pointer to avoid O0 codegen fall-through issue */
+typedef void (*dispatch_fn)(void);
+__attribute__((noinline, noreturn)) static void finish(uint32_t acc) {
+    dispatch_fn fn = (acc == 0x88CA679Bu) ? halt_ok : fail_loop;
+    fn();
+    for (;;) { }  /* Unreachable */
 }
 
 int main(void) {
@@ -91,10 +102,5 @@ int main(void) {
 
     acc ^= rotl32(acc, 7);
 
-    if (acc == 0x88CA679Bu) {
-        halt_ok();
-    }
-
-    fail_loop();
-    return 0;
+    finish(acc);
 }
