@@ -107,15 +107,15 @@ __udivmod8:
 ;   [SP+2] = dividend (u8)
 ;   [SP+3] = divisor (u8)
 ;   Returns: A = quotient (also C = quotient, B = 0 for i16 compat)
+;
+; Tail-call: JMP (not CALL) so __udivmod8 sees the same stack frame.
+; __udivmod8 returns A=quotient, C=remainder.
 ; ===================================================================
 	.globl	__udiv8
 	.type	__udiv8,@function
 __udiv8:
-	call	__udivmod8
-	; A already has quotient
-	mov	c, a
-	mvi	b, 0
-	ret
+	jmp	__udivmod8
+	; __udivmod8 returns directly to our caller with A=quotient
 	.size	__udiv8, .-__udiv8
 
 
@@ -124,12 +124,39 @@ __udiv8:
 ;   [SP+2] = dividend (u8)
 ;   [SP+3] = divisor (u8)
 ;   Returns: A = remainder (also C = remainder, B = 0 for i16 compat)
+;
+; Load args and re-push so __udivmod8 sees them at the right offset.
 ; ===================================================================
 	.globl	__urem8
 	.type	__urem8,@function
 __urem8:
+	; Load args from our stack frame
+	lxi	h, 2
+	dad	sp
+	mov	b, m		; B = dividend
+	inx	h
+	mov	d, m		; D = divisor
+
+	; Push as args for __udivmod8
+	; __udivmod8 expects [SP+2]=dividend, [SP+3]=divisor
+	; After push: [SP+0..1]=pushed data, [SP+2..3]=our ret addr, ...
+	; We push one byte for divisor and one for dividend? No, push is 16-bit.
+	; Simpler: push both as a 16-bit word.
+	; We need [SP+2]=dividend=B, [SP+3]=divisor=D after the call.
+	; CALL will push 2 bytes of return address at [SP+0..1].
+	; So we need dividend at [SP+2], divisor at [SP+3].
+	; Push D (high) and B (low) as a word: push with D at [SP+1], B at [SP+0]
+	; Then CALL pushes ret addr at [SP-2..SP-1], new [SP+2..3] = B, D. Correct!
+	mov	c, b		; C = dividend (low of BC push)
+	mov	b, d		; B = divisor (high of BC push)
+	push	b		; [SP+0]=C=dividend, [SP+1]=B=divisor
+
 	call	__udivmod8
-	; C has remainder
+
+	; Clean up pushed args (2 bytes)
+	pop	h		; discard
+
+	; A = quotient (not needed), C = remainder
 	mov	a, c
 	mvi	b, 0
 	ret
@@ -619,13 +646,14 @@ __udivmod16:
 ;   [SP+2..3] = dividend (u16)
 ;   [SP+4..5] = divisor (u16)
 ;   Returns: BC = quotient
+;
+; Tail-call: JMP so __udivmod16 sees the same stack frame.
 ; ===================================================================
 	.globl	__udiv16
 	.type	__udiv16,@function
 __udiv16:
-	call	__udivmod16
-	; BC already has quotient
-	ret
+	jmp	__udivmod16
+	; __udivmod16 returns directly to our caller with BC=quotient
 	.size	__udiv16, .-__udiv16
 
 
@@ -634,12 +662,34 @@ __udiv16:
 ;   [SP+2..3] = dividend (u16)
 ;   [SP+4..5] = divisor (u16)
 ;   Returns: BC = remainder
+;
+; Load and re-push args for __udivmod16.
 ; ===================================================================
 	.globl	__urem16
 	.type	__urem16,@function
 __urem16:
+	; Load args from our stack frame
+	lxi	h, 2
+	dad	sp
+	mov	c, m		; dividend low
+	inx	h
+	mov	b, m		; dividend high
+	inx	h
+	mov	e, m		; divisor low
+	inx	h
+	mov	d, m		; divisor high
+
+	; Push divisor then dividend (right-to-left for cdecl)
+	push	d		; divisor
+	push	b		; dividend
+
 	call	__udivmod16
-	; DE has remainder, move to BC
+
+	; Clean up 4 bytes of pushed args
+	pop	h		; discard
+	pop	h		; discard
+
+	; DE = remainder, move to BC
 	mov	b, d
 	mov	c, e
 	ret
@@ -940,14 +990,13 @@ __sdivmod16:
 ;   [SP+2..5]  = dividend (u32, little-endian)
 ;   [SP+6..9]  = divisor (u32, little-endian)
 ;   Returns: BC:DE = quotient (C=byte0, B=byte1, E=byte2, D=byte3)
-;            Remainder left on stack at [SP+0..3] (caller's local)
 ;
-; This routine allocates 12 bytes on stack:
-;   4 bytes for dividend (shifts left)
-;   4 bytes for remainder
-;   4 bytes for quotient
-;
-; Then iterates 32 times.
+; Optimized: quotient kept register-resident in BC:DE.
+;   Only 8 bytes allocated on stack (dividend + remainder contiguous).
+;   Dividend and remainder are shifted as one 8-byte chain (no
+;   extra LXI+DAD SP between them).
+;   Trial subtraction replaces MSB-first comparison (restoring
+;   division: subtract, check borrow, undo if needed).
 ; ===================================================================
 	.globl	__udivmod32
 	.type	__udivmod32,@function
@@ -970,15 +1019,10 @@ __udivmod32:
 	ret
 
 .Ludm32_start:
-	; Allocate 12 bytes on stack:
-	;   quotient[0..3]   (initialized to 0)
-	;   remainder[0..3]  (initialized to 0)
-	;   dividend[0..3]   (copy of input)
-
 	; Copy dividend from args to stack
 	lxi	h, 2
 	dad	sp
-	mov	c, m		; dividend[0]
+	mov	a, m		; dividend[0]
 	inx	h
 	mov	b, m		; dividend[1]
 	inx	h
@@ -986,149 +1030,106 @@ __udivmod32:
 	inx	h
 	mov	d, m		; dividend[3]
 
-	; Push dividend
-	push	d		; dividend[2..3]
-	push	b		; dividend[0..1]
-
-	; Push remainder (zero)
+	; Allocate 8 bytes on stack: dividend[0..3] then remainder[0..3]
+	; (contiguous so we can shift all 8 bytes with one INX H chain)
 	lxi	h, 0
 	push	h		; remainder[2..3] = 0
 	push	h		; remainder[0..1] = 0
-
-	; Push quotient (zero)
-	push	h		; quotient[2..3] = 0
-	push	h		; quotient[0..1] = 0
+	push	d		; dividend[2..3]
+	; A still has dividend[0], B has dividend[1]
+	mov	c, a		; C = dividend[0]
+	push	b		; dividend[0..1] (C=byte0, B=byte1)
 
 	; Stack layout (from current SP):
-	;   [SP+ 0.. 1] = quotient[0..1]
-	;   [SP+ 2.. 3] = quotient[2..3]
+	;   [SP+ 0.. 1] = dividend[0..1]
+	;   [SP+ 2.. 3] = dividend[2..3]
 	;   [SP+ 4.. 5] = remainder[0..1]
 	;   [SP+ 6.. 7] = remainder[2..3]
-	;   [SP+ 8.. 9] = dividend[0..1]
-	;   [SP+10..11] = dividend[2..3]
-	;   [SP+12..13] = return address
-	;   [SP+14..17] = arg: dividend (original)
-	;   [SP+18..21] = arg: divisor
+	;   [SP+ 8.. 9] = return address
+	;   [SP+10..13] = arg: dividend (original)
+	;   [SP+14..17] = arg: divisor
 
-	; Loop counter: 32 iterations
-	; We'll use a byte on the stack or a register.
-	; We're short on registers, so use E as counter between iterations.
-	mvi	e, 32
+	; Initialize quotient in BC:DE to 0
+	lxi	b, 0
+	lxi	d, 0
+
+	; Loop counter in A, saved/restored via PUSH/POP PSW
+	mvi	a, 32
 
 .Ludm32_loop:
-	push	d		; save counter (E) on stack (+2 shift)
+	push	psw		; save counter (+2 shift)
 
-	; --- Shift dividend left by 1 bit ---
-	; dividend at [SP+10] (shifted +2 for push)
-	lxi	h, 10
-	dad	sp
-	mov	a, m
+	; --- Shift quotient left (register-resident) ---
+	; C=byte0(LSB), B=byte1, E=byte2, D=byte3(MSB)
+	mov	a, c
 	add	a
-	mov	m, a		; dividend[0] <<= 1
-	inx	h
-	mov	a, m
+	mov	c, a
+	mov	a, b
 	adc	a
-	mov	m, a		; dividend[1]
-	inx	h
-	mov	a, m
+	mov	b, a
+	mov	a, e
 	adc	a
-	mov	m, a		; dividend[2]
-	inx	h
-	mov	a, m
+	mov	e, a
+	mov	a, d
 	adc	a
-	mov	m, a		; dividend[3], carry = old MSB
+	mov	d, a
 
-	; --- Shift remainder left, bring in carry ---
-	; remainder at [SP+6] (shifted +2)
-	lxi	h, 6
-	dad	sp
-	mov	a, m
-	adc	a
-	mov	m, a		; remainder[0]
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a		; remainder[1]
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a		; remainder[2]
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a		; remainder[3]
-
-	; --- Shift quotient left ---
-	; quotient at [SP+2] (shifted +2)
+	; --- Shift dividend[0..3] and remainder[0..3] as 8-byte chain ---
+	; dividend at [SP+2], remainder at [SP+6] (push psw shifted +2)
+	; Contiguous: dividend[0] at [SP+2] through remainder[3] at [SP+9]
 	lxi	h, 2
-	dad	sp
+	dad	sp		; HL -> dividend[0] (DAD clobbers carry, ok here)
 	mov	a, m
-	add	a
-	mov	m, a		; quotient[0]
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a		; quotient[1]
-	inx	h
+	add	a		; dividend[0] <<= 1, carry = old bit 7
+	mov	m, a
+	inx	h		; -> dividend[1] (INX doesn't affect flags)
 	mov	a, m
 	adc	a
-	mov	m, a		; quotient[2]
-	inx	h
+	mov	m, a
+	inx	h		; -> dividend[2]
 	mov	a, m
 	adc	a
-	mov	m, a		; quotient[3]
+	mov	m, a
+	inx	h		; -> dividend[3]
+	mov	a, m
+	adc	a
+	mov	m, a		; carry = MSB of dividend
+	inx	h		; -> remainder[0]
+	mov	a, m
+	adc	a		; remainder[0] = rem[0]*2 + carry_from_dividend
+	mov	m, a
+	inx	h		; -> remainder[1]
+	mov	a, m
+	adc	a
+	mov	m, a
+	inx	h		; -> remainder[2]
+	mov	a, m
+	adc	a
+	mov	m, a
+	inx	h		; -> remainder[3]
+	mov	a, m
+	adc	a
+	mov	m, a
 
-	; --- Compare remainder >= divisor ---
-	; remainder at [SP+6..9] (shifted +2)
-	; divisor at [SP+20..23] (shifted +2)
-	; Compare from MSB to LSB (bytes 3 down to 0)
+	; --- Trial subtraction (restoring division) ---
+	; Save quotient BC:DE to free registers for subtract
+	push	d		; quotient high (+2)
+	push	b		; quotient low (+2)
+	; SP shifted +6 total (push psw + push d + push b)
 
-	; Load remainder[3]
-	lxi	h, 9
-	dad	sp
-	mov	b, m		; remainder[3]
-	lxi	h, 23
-	dad	sp
-	mov	a, b
-	cmp	m		; remainder[3] vs divisor[3]
-	jc	.Ludm32_no_sub	; rem < div -> skip
-	jnz	.Ludm32_do_sub	; rem > div -> subtract
+	; Stack layout now:
+	;   [SP+ 0.. 1] = saved BC (quotient low)
+	;   [SP+ 2.. 3] = saved DE (quotient high)
+	;   [SP+ 4.. 5] = saved PSW (counter)
+	;   [SP+ 6.. 7] = dividend[0..1]
+	;   [SP+ 8.. 9] = dividend[2..3]
+	;   [SP+10..11] = remainder[0..1]
+	;   [SP+12..13] = remainder[2..3]
+	;   [SP+14..15] = return address
+	;   [SP+16..19] = arg: dividend
+	;   [SP+20..23] = arg: divisor
 
-	; Byte 3 equal, compare byte 2
-	lxi	h, 8
-	dad	sp
-	mov	b, m		; remainder[2]
-	lxi	h, 22
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Ludm32_no_sub
-	jnz	.Ludm32_do_sub
-
-	; Byte 2 equal, compare byte 1
-	lxi	h, 7
-	dad	sp
-	mov	b, m		; remainder[1]
-	lxi	h, 21
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Ludm32_no_sub
-	jnz	.Ludm32_do_sub
-
-	; Byte 1 equal, compare byte 0
-	lxi	h, 6
-	dad	sp
-	mov	b, m		; remainder[0]
-	lxi	h, 20
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Ludm32_no_sub
-
-.Ludm32_do_sub:
-	; remainder -= divisor (4-byte subtract)
-	; Load divisor into registers
+	; Load divisor into C,B,E,D
 	lxi	h, 20
 	dad	sp
 	mov	c, m		; divisor[0]
@@ -1139,9 +1140,9 @@ __udivmod32:
 	inx	h
 	mov	d, m		; divisor[3]
 
-	; Subtract from remainder
-	lxi	h, 6
-	dad	sp
+	; Trial subtract: remainder -= divisor
+	lxi	h, 10
+	dad	sp		; HL -> remainder[0]
 	mov	a, m
 	sub	c
 	mov	m, a		; remainder[0] -= divisor[0]
@@ -1158,32 +1159,48 @@ __udivmod32:
 	sbb	d
 	mov	m, a		; remainder[3]
 
-	; Set bit 0 of quotient
-	lxi	h, 2
-	dad	sp
+	; If carry set: remainder was < divisor, undo subtraction
+	jc	.Ludm32_restore
+
+	; remainder >= divisor: keep subtraction, set quotient bit 0
+	pop	b		; restore quotient low
+	pop	d		; restore quotient high
+	inr	c		; set bit 0 (C was just shifted left, so bit 0 = 0)
+	jmp	.Ludm32_next
+
+.Ludm32_restore:
+	; Undo: remainder += divisor (C,B,E,D still hold divisor)
+	lxi	h, 10
+	dad	sp		; HL -> remainder[0]
 	mov	a, m
-	ori	1
+	add	c
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	b
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	e
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	d
 	mov	m, a
 
-.Ludm32_no_sub:
-	; Restore counter
-	pop	d		; E = counter (SP back to normal)
-	dcr	e
+	; Restore quotient (bit 0 stays 0)
+	pop	b
+	pop	d
+
+.Ludm32_next:
+	; Restore counter and loop
+	pop	psw
+	dcr	a
 	jnz	.Ludm32_loop
 
-	; --- Done: load quotient into BC:DE ---
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; quotient[0] -> C
-	inx	h
-	mov	b, m		; quotient[1] -> B
-	inx	h
-	mov	e, m		; quotient[2] -> E
-	inx	h
-	mov	d, m		; quotient[3] -> D
-
-	; Deallocate 12 bytes (quotient + remainder + dividend)
-	lxi	h, 12
+	; BC:DE already has quotient
+	; Deallocate 8 bytes (dividend + remainder)
+	lxi	h, 8
 	dad	sp
 	sphl
 
@@ -1196,13 +1213,14 @@ __udivmod32:
 ;   [SP+2..5]  = dividend (u32)
 ;   [SP+6..9]  = divisor (u32)
 ;   Returns: BC:DE = quotient
+;
+; Tail-call: JMP so __udivmod32 sees the same stack frame.
 ; ===================================================================
 	.globl	__udiv32
 	.type	__udiv32,@function
 __udiv32:
-	call	__udivmod32
-	; BC:DE already has quotient
-	ret
+	jmp	__udivmod32
+	; __udivmod32 returns directly to our caller with BC:DE=quotient
 	.size	__udiv32, .-__udiv32
 
 
@@ -1212,9 +1230,9 @@ __udiv32:
 ;   [SP+6..9]  = divisor (u32)
 ;   Returns: BC:DE = remainder
 ;
-; Strategy: we need to run the division and extract the remainder.
-; Since __udivmod32 deallocates its locals, we replicate the core
-; here but read the remainder before cleanup.
+; Optimized: no quotient needed, so BC:DE are free during the loop.
+;   Uses contiguous dividend+remainder layout and trial subtraction
+;   (restoring division).
 ; ===================================================================
 	.globl	__urem32
 	.type	__urem32,@function
@@ -1237,34 +1255,43 @@ __urem32:
 	ret
 
 .Lurm32_start:
-	; Copy dividend to stack
+	; Copy dividend to stack, allocate remainder
 	lxi	h, 2
 	dad	sp
-	mov	c, m
+	mov	a, m		; dividend[0]
 	inx	h
-	mov	b, m
+	mov	b, m		; dividend[1]
 	inx	h
-	mov	e, m
+	mov	e, m		; dividend[2]
 	inx	h
-	mov	d, m
+	mov	d, m		; dividend[3]
 
-	push	d		; dividend[2..3]
-	push	b		; dividend[0..1]
+	; Allocate 8 bytes: dividend[0..3] then remainder[0..3] (contiguous)
 	lxi	h, 0
 	push	h		; remainder[2..3] = 0
 	push	h		; remainder[0..1] = 0
-	push	h		; quotient[2..3] = 0  (not needed, but keeps layout)
-	push	h		; quotient[0..1] = 0
+	push	d		; dividend[2..3]
+	mov	c, a		; C = dividend[0]
+	push	b		; dividend[0..1]
 
-	; Same stack layout as __udivmod32
-	mvi	e, 32
+	; Stack layout (from current SP):
+	;   [SP+ 0.. 1] = dividend[0..1]
+	;   [SP+ 2.. 3] = dividend[2..3]
+	;   [SP+ 4.. 5] = remainder[0..1]
+	;   [SP+ 6.. 7] = remainder[2..3]
+	;   [SP+ 8.. 9] = return address
+	;   [SP+10..13] = arg: dividend
+	;   [SP+14..17] = arg: divisor
+
+	mvi	a, 32		; loop counter
 
 .Lurm32_loop:
-	push	d		; save counter
+	push	psw		; save counter (+2)
 
-	; Shift dividend left
-	lxi	h, 10
-	dad	sp
+	; --- Shift dividend[0..3] and remainder[0..3] as 8-byte chain ---
+	; dividend at [SP+2], remainder at [SP+6] (push psw shifted +2)
+	lxi	h, 2
+	dad	sp		; HL -> dividend[0]
 	mov	a, m
 	add	a
 	mov	m, a
@@ -1279,84 +1306,40 @@ __urem32:
 	inx	h
 	mov	a, m
 	adc	a
+	mov	m, a		; carry = MSB of dividend
+	inx	h		; -> remainder[0]
+	mov	a, m
+	adc	a
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	a
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	a
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	a
 	mov	m, a
 
-	; Shift remainder left with carry
+	; --- Trial subtraction: remainder -= divisor ---
+	; No quotient to save -- BC:DE are free
+	; Load divisor into C,B,E,D
+	lxi	h, 16
+	dad	sp		; divisor at [SP+16] (push psw +2)
+	mov	c, m		; divisor[0]
+	inx	h
+	mov	b, m		; divisor[1]
+	inx	h
+	mov	e, m		; divisor[2]
+	inx	h
+	mov	d, m		; divisor[3]
+
+	; Trial subtract: remainder -= divisor
 	lxi	h, 6
-	dad	sp
-	mov	a, m
-	adc	a
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	a
-	mov	m, a
-
-	; We don't need to maintain quotient for __urem32
-	; but we still need the comparison and subtraction.
-
-	; Compare remainder >= divisor
-	lxi	h, 9
-	dad	sp
-	mov	b, m
-	lxi	h, 23
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Lurm32_no_sub
-	jnz	.Lurm32_do_sub
-
-	lxi	h, 8
-	dad	sp
-	mov	b, m
-	lxi	h, 22
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Lurm32_no_sub
-	jnz	.Lurm32_do_sub
-
-	lxi	h, 7
-	dad	sp
-	mov	b, m
-	lxi	h, 21
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Lurm32_no_sub
-	jnz	.Lurm32_do_sub
-
-	lxi	h, 6
-	dad	sp
-	mov	b, m
-	lxi	h, 20
-	dad	sp
-	mov	a, b
-	cmp	m
-	jc	.Lurm32_no_sub
-
-.Lurm32_do_sub:
-	; remainder -= divisor
-	lxi	h, 20
-	dad	sp
-	mov	c, m
-	inx	h
-	mov	b, m
-	inx	h
-	mov	e, m
-	inx	h
-	mov	d, m
-
-	lxi	h, 6
-	dad	sp
+	dad	sp		; HL -> remainder[0]
 	mov	a, m
 	sub	c
 	mov	m, a
@@ -1373,9 +1356,31 @@ __urem32:
 	sbb	d
 	mov	m, a
 
-.Lurm32_no_sub:
-	pop	d
-	dcr	e
+	; If carry: remainder was < divisor, restore
+	jnc	.Lurm32_no_restore
+
+	; Undo: remainder += divisor
+	lxi	h, 6
+	dad	sp		; HL -> remainder[0]
+	mov	a, m
+	add	c
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	b
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	e
+	mov	m, a
+	inx	h
+	mov	a, m
+	adc	d
+	mov	m, a
+
+.Lurm32_no_restore:
+	pop	psw
+	dcr	a
 	jnz	.Lurm32_loop
 
 	; Load remainder into BC:DE
@@ -1389,8 +1394,8 @@ __urem32:
 	inx	h
 	mov	d, m		; remainder[3] -> D
 
-	; Deallocate 12 bytes
-	lxi	h, 12
+	; Deallocate 8 bytes
+	lxi	h, 8
 	dad	sp
 	sphl
 
@@ -1496,7 +1501,9 @@ __sdiv32:
 	push	b		; divisor[0..1]
 
 	; Load dividend
-	lxi	h, 12		; dividend at [SP+4+8 pushed]
+	; After push psw (+2), push d (+2), push b (+2) = +6 total
+	; dividend was at [SP_orig+2..5], now at [SP+8..11]
+	lxi	h, 8
 	dad	sp
 	mov	c, m
 	inx	h
@@ -1639,7 +1646,9 @@ __srem32:
 	push	b
 
 	; Load dividend
-	lxi	h, 12
+	; After push psw (+2), push d (+2), push b (+2) = +6 total
+	; dividend was at [SP_orig+2..5], now at [SP+8..11]
+	lxi	h, 8
 	dad	sp
 	mov	c, m
 	inx	h

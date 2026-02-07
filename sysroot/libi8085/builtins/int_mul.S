@@ -278,11 +278,11 @@ __mul32:
 ; Strategy: determine result sign from arg signs, negate negative
 ; args, do unsigned 16x16->32 multiply, negate result if needed.
 ;
-; The unsigned core uses a stack-based approach:
-;   - 4-byte result on stack (zeroed)
-;   - multiplier in DE (16-bit, shifts right, early termination)
-;   - multiplicand on stack (4 bytes, starts as 16-bit zero-extended,
-;     shifts left each iteration)
+; Optimised: result lives in BC:DE (register-resident).
+; Multiplier at top of stack, accessed via XTHL (16 cyc) to swap
+; into/out of HL without affecting flags.  This avoids the
+; push/pop multiplier + two LXI+DAD SP pairs that the old
+; stack-resident-result approach needed on every add iteration.
 ; ===================================================================
 	.globl	__mulsi16
 	.type	__mulsi16,@function
@@ -333,87 +333,78 @@ __mulsi16:
 .Lms16_b_pos:
 
 	; DE = |a| (multiplier), BC = |b| (multiplicand)
-	; Allocate 4 bytes for multiplicand (zero-extended to 32 bits)
+	; Allocate multiplicand on stack (4 bytes, zero-extended)
 	lxi	h, 0
 	push	h		; mcand[2..3] = 0
 	push	b		; mcand[0..1] = |b|
-
-	; Allocate 4 bytes for result, initialised to 0
-	push	h		; result[2..3] = 0
-	push	h		; result[0..1] = 0
+	; Push multiplier to top of stack (for XTHL access)
+	push	d		; [SP+0..1] = multiplier
 
 	; Stack layout (offsets from current SP):
-	;   [SP+0..1]  = result[0..1]
-	;   [SP+2..3]  = result[2..3]
-	;   [SP+4..5]  = mcand[0..1]
-	;   [SP+6..7]  = mcand[2..3]
-	;   [SP+8..9]  = sign flag (PSW push)
-	;   [SP+10..11] = return address
-	;   [SP+12..13] = a (original arg)
-	;   [SP+14..15] = b (original arg)
+	;   [SP+0..1]  = multiplier (accessed via XTHL)
+	;   [SP+2..5]  = multiplicand (|b|, zero-extended to 32-bit)
+	;   [SP+6..7]  = sign flag (PSW push)
+	;   [SP+8..9]  = return address
+	;   [SP+10..11] = a (original arg)
+	;   [SP+12..13] = b (original arg)
 
-	; DE = |a| (multiplier, shifts right)
+	; Result lives in BC:DE -- register-resident.
+	lxi	b, 0		; result bytes 0-1 (C=byte0, B=byte1)
+	lxi	d, 0		; result bytes 2-3 (E=byte2, D=byte3)
 
 .Lms16_loop:
-	; Early exit when multiplier == 0
-	mov	a, d
-	ora	e
+	; --- Load multiplier into HL, check if zero ---
+	xthl			; HL = multiplier, [SP] = junk (old HL)
+	mov	a, h
+	ora	l
 	jz	.Lms16_mul_done
 
-	; Test LSB of multiplier
-	mov	a, e
-	ani	1
-	jz	.Lms16_no_add
-
-	; result += multiplicand (32-bit add)
-	; Load multiplicand into BCHL... no, use byte-by-byte from stack.
-	push	d		; save multiplier
-
-	lxi	h, 6		; -> mcand[0] (SP shifted by push d = +2)
-	dad	sp
-	mov	c, m		; mcand[0]
-	inx	h
-	mov	b, m		; mcand[1]
-	inx	h
-	mov	e, m		; mcand[2]
-	inx	h
-	mov	d, m		; mcand[3]
-
-	lxi	h, 2		; -> result[0] (SP shifted by push d = +2)
-	dad	sp
-	mov	a, m
-	add	c
-	mov	m, a		; result[0] += mcand[0]
-	inx	h
-	mov	a, m
-	adc	b
-	mov	m, a		; result[1] += mcand[1] + carry
-	inx	h
-	mov	a, m
-	adc	e
-	mov	m, a		; result[2] += mcand[2] + carry
-	inx	h
-	mov	a, m
-	adc	d
-	mov	m, a		; result[3] += mcand[3] + carry
-
-	pop	d		; restore multiplier
-
-.Lms16_no_add:
-	; multiplier >>= 1 (DE >>= 1)
-	mov	a, d
+	; --- Shift multiplier right by 1, capture old bit0 in carry ---
+	mov	a, h
 	ora	a		; clear carry
 	rar
-	mov	d, a
-	mov	a, e
+	mov	h, a
+	mov	a, l
 	rar
+	mov	l, a
+	; carry = old bit 0 of multiplier
+
+	; --- Save shifted multiplier back to stack ---
+	xthl			; [SP] = shifted multiplier, HL = junk
+	; (XTHL does not affect flags -- carry is preserved)
+
+	; --- Branch: skip add if old bit 0 was 0 ---
+	jnc	.Lms16_no_add
+
+	; --- result (BC:DE) += multiplicand (on stack) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
+
+	mov	a, c
+	add	m		; C += mcand[0]
+	mov	c, a
+
+	inx	h		; -> mcand[1]
+	mov	a, b
+	adc	m		; B += mcand[1] + carry
+	mov	b, a
+
+	inx	h		; -> mcand[2]
+	mov	a, e
+	adc	m		; E += mcand[2] + carry
 	mov	e, a
 
-	; multiplicand <<= 1 (4 bytes on stack)
-	lxi	h, 4
-	dad	sp		; -> mcand[0]
+	inx	h		; -> mcand[3]
+	mov	a, d
+	adc	m		; D += mcand[3] + carry
+	mov	d, a
+
+.Lms16_no_add:
+	; --- Shift multiplicand left by 1 (4 bytes on stack) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
 	mov	a, m
-	add	a
+	add	a		; mcand[0] <<= 1
 	mov	m, a
 	inx	h
 	mov	a, m
@@ -431,19 +422,10 @@ __mulsi16:
 	jmp	.Lms16_loop
 
 .Lms16_mul_done:
-	; Load result into BC:DE
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; result[0] -> C
-	inx	h
-	mov	b, m		; result[1] -> B
-	inx	h
-	mov	e, m		; result[2] -> E
-	inx	h
-	mov	d, m		; result[3] -> D
-
-	; Deallocate result + multiplicand (8 bytes)
-	lxi	h, 8
+	; HL = 0 (multiplier was zero). [SP] has junk from XTHL.
+	; Result is already in BC:DE.
+	; Deallocate multiplier + multiplicand (6 bytes)
+	lxi	h, 6
 	dad	sp
 	sphl
 
@@ -487,7 +469,10 @@ __mulsi16:
 ; Optimisation: we need bytes 1 and 2 of the product.
 ; Byte 0 can be skipped (only its carry into byte 1 matters).
 ; Byte 3 is not needed.  So we accumulate a 3-byte result
-; (bytes 0, 1, 2) and return bytes 1-2.
+; (bytes 0, 1, 2) in registers and return bytes 1-2.
+;
+; Register-resident result: C=byte0, B=byte1, D=byte2.
+; Multiplier at top of stack, accessed via XTHL.
 ; ===================================================================
 	.globl	__mulsi16_shr8
 	.type	__mulsi16_shr8,@function
@@ -538,75 +523,69 @@ __mulsi16_shr8:
 .Lms16s8_b_pos:
 
 	; DE = |a| (multiplier), BC = |b| (multiplicand)
-	; Allocate multiplicand on stack (3 bytes needed: bytes 0,1,2)
-	; We'll use 4 bytes for alignment: mcand[0..3]
+	; Allocate multiplicand on stack (4 bytes, zero-extended, only 3 used)
 	lxi	h, 0
 	push	h		; mcand[2..3] = 0
 	push	b		; mcand[0..1] = |b|
-
-	; Allocate 3 bytes for result (bytes 0,1,2), use 4 for alignment
-	push	h		; result[2..3] = 0
-	push	h		; result[0..1] = 0
+	; Push multiplier to top of stack (for XTHL access)
+	push	d		; [SP+0..1] = multiplier
 
 	; Stack layout:
-	;   [SP+0..1]  = result[0..1]
-	;   [SP+2..3]  = result[2..3]  (only byte 2 used)
-	;   [SP+4..5]  = mcand[0..1]
-	;   [SP+6..7]  = mcand[2..3]  (only byte 2 used)
-	;   [SP+8..9]  = sign flag
-	;   [SP+10..11] = return address
-	;   [SP+12..13] = a
-	;   [SP+14..15] = b
+	;   [SP+0..1]  = multiplier (accessed via XTHL)
+	;   [SP+2..5]  = multiplicand (|b|, zero-extended)
+	;   [SP+6..7]  = sign flag
+	;   [SP+8..9]  = return address
+
+	; Result in registers: C=byte0, B=byte1, D=byte2
+	mvi	c, 0
+	mvi	b, 0
+	mvi	d, 0
 
 .Lms16s8_loop:
-	mov	a, d
-	ora	e
+	; --- Load multiplier into HL, check if zero ---
+	xthl			; HL = multiplier, [SP] = junk
+	mov	a, h
+	ora	l
 	jz	.Lms16s8_mul_done
 
-	mov	a, e
-	ani	1
-	jz	.Lms16s8_no_add
+	; --- Shift multiplier right by 1, capture old bit0 in carry ---
+	mov	a, h
+	ora	a		; clear carry
+	rar
+	mov	h, a
+	mov	a, l
+	rar
+	mov	l, a
+	; carry = old bit 0 of multiplier
 
-	; result[0..2] += mcand[0..2]
-	push	d
+	; --- Save shifted multiplier back ---
+	xthl			; [SP] = shifted multiplier, HL = junk
+	; (XTHL does not affect flags)
 
-	lxi	h, 6
-	dad	sp		; -> mcand[0] (adjusted for push)
-	mov	c, m		; mcand[0]
-	inx	h
-	mov	b, m		; mcand[1]
-	inx	h
-	mov	e, m		; mcand[2]
+	jnc	.Lms16s8_no_add
 
+	; --- result (C:B:D) += mcand[0..2] from stack ---
 	lxi	h, 2
-	dad	sp		; -> result[0]
-	mov	a, m
-	add	c
-	mov	m, a		; result[0] += mcand[0]
-	inx	h
-	mov	a, m
-	adc	b
-	mov	m, a		; result[1] += mcand[1] + carry
-	inx	h
-	mov	a, m
-	adc	e
-	mov	m, a		; result[2] += mcand[2] + carry
+	dad	sp		; HL -> mcand[0]
 
-	pop	d
+	mov	a, c
+	add	m		; C += mcand[0]
+	mov	c, a
+
+	inx	h		; -> mcand[1]
+	mov	a, b
+	adc	m		; B += mcand[1] + carry
+	mov	b, a
+
+	inx	h		; -> mcand[2]
+	mov	a, d
+	adc	m		; D += mcand[2] + carry
+	mov	d, a
 
 .Lms16s8_no_add:
-	; multiplier >>= 1
-	mov	a, d
-	ora	a
-	rar
-	mov	d, a
-	mov	a, e
-	rar
-	mov	e, a
-
-	; multiplicand <<= 1 (3 bytes: mcand[0..2])
-	lxi	h, 4
-	dad	sp
+	; --- Shift multiplicand left by 1 (3 bytes: mcand[0..2]) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
 	mov	a, m
 	add	a
 	mov	m, a
@@ -622,20 +601,10 @@ __mulsi16_shr8:
 	jmp	.Lms16s8_loop
 
 .Lms16s8_mul_done:
-	; Deallocate result + multiplicand (8 bytes) but first check sign.
-	; Pop sign to decide if we negate before extracting bytes 1-2.
-
-	; Load result bytes 0,1,2 into registers
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; result[0]
-	inx	h
-	mov	b, m		; result[1]
-	inx	h
-	mov	e, m		; result[2]
-
-	; Deallocate 8 bytes (result + multiplicand)
-	lxi	h, 8
+	; HL = 0 (multiplier was zero).
+	; Result is in C=byte0, B=byte1, D=byte2.
+	; Deallocate multiplier + multiplicand (6 bytes)
+	lxi	h, 6
 	dad	sp
 	sphl
 
@@ -644,8 +613,8 @@ __mulsi16_shr8:
 	ora	a
 	jp	.Lms16s8_pos_result
 
-	; Negate 3-byte result in C:B:E (C=byte0, B=byte1, E=byte2)
-	; Then return bytes 1-2 (B and E)
+	; Negate 3-byte result in C:B:D (C=byte0, B=byte1, D=byte2)
+	; Then return bytes 1-2 (B and D)
 	mov	a, c
 	cma
 	adi	1		; ~byte0 + 1
@@ -653,7 +622,7 @@ __mulsi16_shr8:
 	cma
 	aci	0		; ~byte1 + carry
 	mov	c, a		; C = negated byte1 (return low)
-	mov	a, e
+	mov	a, d
 	cma
 	aci	0		; ~byte2 + carry
 	mov	b, a		; B = negated byte2 (return high)
@@ -662,7 +631,7 @@ __mulsi16_shr8:
 .Lms16s8_pos_result:
 	; Return bytes 1-2: B=byte2 (high), C=byte1 (low)
 	mov	c, b		; C = byte1
-	mov	b, e		; B = byte2
+	mov	b, d		; B = byte2
 	ret
 	.size	__mulsi16_shr8, .-__mulsi16_shr8
 
@@ -674,13 +643,9 @@ __mulsi16_shr8:
 ;   Returns upper 16 bits of signed 32-bit product: bits [31:16].
 ;   Result in BC.
 ;
-; Optimisation: we need bytes 2-3 of the product.
-; Bytes 0-1 can be skipped, but we must track the carry from byte 1
-; into byte 2.  We accumulate a 4-byte result but only read bytes 2-3.
-; Actually, to track carry correctly, we accumulate all 4 bytes
-; but can be smarter: we only need the carry out of byte 1.
-; For simplicity and correctness, we use the full __mulsi16 approach
-; but only return bytes 2-3.
+; Optimised: register-resident result in BC:DE.
+; Multiplier at top of stack, accessed via XTHL.
+; Same core loop as __mulsi16 but returns bytes 2-3 (E:D -> C:B).
 ; ===================================================================
 	.globl	__mulsi16_hi16
 	.type	__mulsi16_hi16,@function
@@ -730,72 +695,74 @@ __mulsi16_hi16:
 	inx	b
 .Lms16h_b_pos:
 
-	; Allocate multiplicand (4 bytes)
+	; DE = |a| (multiplier), BC = |b| (multiplicand)
+	; Allocate multiplicand on stack (4 bytes, zero-extended)
 	lxi	h, 0
 	push	h		; mcand[2..3] = 0
 	push	b		; mcand[0..1] = |b|
+	; Push multiplier to top of stack (for XTHL access)
+	push	d		; [SP+0..1] = multiplier
 
-	; Allocate result (4 bytes)
-	push	h
-	push	h
+	; Stack layout:
+	;   [SP+0..1]  = multiplier (accessed via XTHL)
+	;   [SP+2..5]  = multiplicand (|b|, zero-extended)
+	;   [SP+6..7]  = sign flag
+	;   [SP+8..9]  = return address
 
-	; Stack layout same as __mulsi16
+	; Result in BC:DE (register-resident)
+	lxi	b, 0		; C=byte0, B=byte1
+	lxi	d, 0		; E=byte2, D=byte3
 
 .Lms16h_loop:
-	mov	a, d
-	ora	e
+	; --- Load multiplier into HL, check if zero ---
+	xthl			; HL = multiplier, [SP] = junk
+	mov	a, h
+	ora	l
 	jz	.Lms16h_mul_done
 
-	mov	a, e
-	ani	1
-	jz	.Lms16h_no_add
+	; --- Shift multiplier right by 1, capture old bit0 in carry ---
+	mov	a, h
+	ora	a		; clear carry
+	rar
+	mov	h, a
+	mov	a, l
+	rar
+	mov	l, a
+	; carry = old bit 0 of multiplier
 
-	; result += multiplicand (full 4-byte add)
-	push	d
+	; --- Save shifted multiplier back ---
+	xthl			; [SP] = shifted multiplier, HL = junk
+	; (XTHL does not affect flags)
 
-	lxi	h, 6
-	dad	sp
-	mov	c, m
-	inx	h
-	mov	b, m
-	inx	h
-	mov	e, m
-	inx	h
-	mov	d, m
+	jnc	.Lms16h_no_add
 
+	; --- result (BC:DE) += multiplicand (on stack) ---
 	lxi	h, 2
-	dad	sp
-	mov	a, m
-	add	c
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	b
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	e
-	mov	m, a
-	inx	h
-	mov	a, m
-	adc	d
-	mov	m, a
+	dad	sp		; HL -> mcand[0]
 
-	pop	d
+	mov	a, c
+	add	m		; C += mcand[0]
+	mov	c, a
 
-.Lms16h_no_add:
-	; multiplier >>= 1
-	mov	a, d
-	ora	a
-	rar
-	mov	d, a
+	inx	h		; -> mcand[1]
+	mov	a, b
+	adc	m		; B += mcand[1] + carry
+	mov	b, a
+
+	inx	h		; -> mcand[2]
 	mov	a, e
-	rar
+	adc	m		; E += mcand[2] + carry
 	mov	e, a
 
-	; multiplicand <<= 1 (4 bytes)
-	lxi	h, 4
-	dad	sp
+	inx	h		; -> mcand[3]
+	mov	a, d
+	adc	m		; D += mcand[3] + carry
+	mov	d, a
+
+.Lms16h_no_add:
+	; --- Shift multiplicand left by 1 (4 bytes) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
 	mov	a, m
 	add	a
 	mov	m, a
@@ -815,19 +782,10 @@ __mulsi16_hi16:
 	jmp	.Lms16h_loop
 
 .Lms16h_mul_done:
-	; Load all 4 result bytes
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; result[0]
-	inx	h
-	mov	b, m		; result[1]
-	inx	h
-	mov	e, m		; result[2]
-	inx	h
-	mov	d, m		; result[3]
-
-	; Deallocate 8 bytes
-	lxi	h, 8
+	; HL = 0 (multiplier was zero).
+	; Result is in BC:DE.
+	; Deallocate multiplier + multiplicand (6 bytes)
+	lxi	h, 6
 	dad	sp
 	sphl
 
@@ -2394,11 +2352,8 @@ __mului8:
 ; This is the unsigned widening 16x16->32 multiply.
 ; Simpler than __mulsi16 because no sign handling is needed.
 ;
-; Uses a stack-based approach:
-;   - 4-byte result on stack (zeroed)
-;   - multiplier in DE (16-bit, shifts right, early termination)
-;   - multiplicand on stack (4 bytes, starts as 16-bit zero-extended,
-;     shifts left each iteration)
+; Optimised: result lives in BC:DE (register-resident).
+; Multiplier at top of stack, accessed via XTHL.
 ; ===================================================================
 	.globl	__mului16
 	.type	__mului16,@function
@@ -2417,85 +2372,77 @@ __mului16:
 	inx	h
 	mov	b, m
 
-	; Allocate 4 bytes for multiplicand (zero-extended to 32 bits)
+	; Allocate multiplicand on stack (4 bytes, zero-extended)
 	lxi	h, 0
 	push	h		; mcand[2..3] = 0
 	push	b		; mcand[0..1] = b
-
-	; Allocate 4 bytes for result, initialised to 0
-	push	h		; result[2..3] = 0
-	push	h		; result[0..1] = 0
+	; Push multiplier to top of stack (for XTHL access)
+	push	d		; [SP+0..1] = multiplier
 
 	; Stack layout (offsets from current SP):
-	;   [SP+0..1]  = result[0..1]
-	;   [SP+2..3]  = result[2..3]
-	;   [SP+4..5]  = mcand[0..1]
-	;   [SP+6..7]  = mcand[2..3]
-	;   [SP+8..9]  = return address
-	;   [SP+10..11] = a (original arg)
-	;   [SP+12..13] = b (original arg)
+	;   [SP+0..1]  = multiplier (accessed via XTHL)
+	;   [SP+2..5]  = multiplicand (b, zero-extended to 32-bit)
+	;   [SP+6..7]  = return address
+	;   [SP+8..9]  = a (original arg)
+	;   [SP+10..11] = b (original arg)
 
-	; DE = a (multiplier, shifts right)
+	; Result lives in BC:DE -- register-resident.
+	lxi	b, 0		; result bytes 0-1 (C=byte0, B=byte1)
+	lxi	d, 0		; result bytes 2-3 (E=byte2, D=byte3)
 
 .Lmu16_loop:
-	; Early exit when multiplier == 0
-	mov	a, d
-	ora	e
+	; --- Load multiplier into HL, check if zero ---
+	xthl			; HL = multiplier, [SP] = junk (old HL)
+	mov	a, h
+	ora	l
 	jz	.Lmu16_mul_done
 
-	; Test LSB of multiplier
-	mov	a, e
-	ani	1
-	jz	.Lmu16_no_add
-
-	; result += multiplicand (32-bit add)
-	push	d		; save multiplier
-
-	lxi	h, 6		; -> mcand[0] (SP shifted by push d = +2)
-	dad	sp
-	mov	c, m		; mcand[0]
-	inx	h
-	mov	b, m		; mcand[1]
-	inx	h
-	mov	e, m		; mcand[2]
-	inx	h
-	mov	d, m		; mcand[3]
-
-	lxi	h, 2		; -> result[0] (SP shifted by push d = +2)
-	dad	sp
-	mov	a, m
-	add	c
-	mov	m, a		; result[0] += mcand[0]
-	inx	h
-	mov	a, m
-	adc	b
-	mov	m, a		; result[1] += mcand[1] + carry
-	inx	h
-	mov	a, m
-	adc	e
-	mov	m, a		; result[2] += mcand[2] + carry
-	inx	h
-	mov	a, m
-	adc	d
-	mov	m, a		; result[3] += mcand[3] + carry
-
-	pop	d		; restore multiplier
-
-.Lmu16_no_add:
-	; multiplier >>= 1 (DE >>= 1)
-	mov	a, d
+	; --- Shift multiplier right by 1, capture old bit0 in carry ---
+	mov	a, h
 	ora	a		; clear carry
 	rar
-	mov	d, a
-	mov	a, e
+	mov	h, a
+	mov	a, l
 	rar
+	mov	l, a
+	; carry = old bit 0 of multiplier
+
+	; --- Save shifted multiplier back to stack ---
+	xthl			; [SP] = shifted multiplier, HL = junk
+	; (XTHL does not affect flags -- carry is preserved)
+
+	; --- Branch: skip add if old bit 0 was 0 ---
+	jnc	.Lmu16_no_add
+
+	; --- result (BC:DE) += multiplicand (on stack) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
+
+	mov	a, c
+	add	m		; C += mcand[0]
+	mov	c, a
+
+	inx	h		; -> mcand[1]
+	mov	a, b
+	adc	m		; B += mcand[1] + carry
+	mov	b, a
+
+	inx	h		; -> mcand[2]
+	mov	a, e
+	adc	m		; E += mcand[2] + carry
 	mov	e, a
 
-	; multiplicand <<= 1 (4 bytes on stack)
-	lxi	h, 4
-	dad	sp		; -> mcand[0]
+	inx	h		; -> mcand[3]
+	mov	a, d
+	adc	m		; D += mcand[3] + carry
+	mov	d, a
+
+.Lmu16_no_add:
+	; --- Shift multiplicand left by 1 (4 bytes on stack) ---
+	lxi	h, 2
+	dad	sp		; HL -> mcand[0]
 	mov	a, m
-	add	a
+	add	a		; mcand[0] <<= 1
 	mov	m, a
 	inx	h
 	mov	a, m
@@ -2513,19 +2460,9 @@ __mului16:
 	jmp	.Lmu16_loop
 
 .Lmu16_mul_done:
-	; Load result into BC:DE
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; result[0] -> C
-	inx	h
-	mov	b, m		; result[1] -> B
-	inx	h
-	mov	e, m		; result[2] -> E
-	inx	h
-	mov	d, m		; result[3] -> D
-
-	; Deallocate result + multiplicand (8 bytes)
-	lxi	h, 8
+	; HL = 0 (multiplier was zero). Result is in BC:DE.
+	; Deallocate multiplier + multiplicand (6 bytes)
+	lxi	h, 6
 	dad	sp
 	sphl
 

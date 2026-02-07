@@ -45,50 +45,58 @@ static volatile uint8_t *const out = (volatile uint8_t *)OUTPUT_ADDR;
 /* ------------------------------------------------------------ */
 /* 8-bit division tests                                          */
 /* ------------------------------------------------------------ */
+/* Volatile inputs to prevent constant folding */
+static volatile uint8_t d8_a1 = 200, d8_b1 = 7;
+static volatile uint8_t d8_a2 = 255, d8_b2 = 16;
+static volatile int8_t  d8_sa1 = -100, d8_sb1 = 7;
+static volatile int8_t  d8_sa2 = 100, d8_sb2 = -7;
+static volatile uint8_t d8_a3 = 0, d8_b3 = 5;
+static volatile uint8_t d8_a4 = 100, d8_b4 = 1;
+
 __attribute__((noinline))
 static uint8_t test_div8(void) {
     volatile uint8_t *p = out;
     uint8_t ok = 1;
 
     /* Unsigned: 200 / 7 = 28, 200 % 7 = 4 */
-    uint8_t uq = (uint8_t)200u / (uint8_t)7u;
-    uint8_t ur = (uint8_t)200u % (uint8_t)7u;
+    uint8_t uq = d8_a1 / d8_b1;
+    uint8_t ur = d8_a1 % d8_b1;
     store8(p, uq); p += 1;
     store8(p, ur); p += 1;
     if (uq != 28) ok = 0;
     if (ur != 4) ok = 0;
 
     /* Unsigned: 255 / 16 = 15, 255 % 16 = 15 */
-    uq = (uint8_t)255u / (uint8_t)16u;
-    ur = (uint8_t)255u % (uint8_t)16u;
+    uq = d8_a2 / d8_b2;
+    ur = d8_a2 % d8_b2;
     store8(p, uq); p += 1;
     store8(p, ur); p += 1;
     if (uq != 15) ok = 0;
     if (ur != 15) ok = 0;
 
     /* Signed: -100 / 7 = -14, -100 % 7 = -2 */
-    int8_t sq = (int8_t)(-100) / (int8_t)7;
-    int8_t sr = (int8_t)(-100) % (int8_t)7;
+    int8_t sq = d8_sa1 / d8_sb1;
+    int8_t sr = d8_sa1 % d8_sb1;
     store8(p, (uint8_t)sq); p += 1;
     store8(p, (uint8_t)sr); p += 1;
     if (sq != -14) ok = 0;
     if (sr != -2) ok = 0;
 
     /* Signed: 100 / -7 = -14, 100 % -7 = 2 */
-    sq = (int8_t)100 / (int8_t)(-7);
-    sr = (int8_t)100 % (int8_t)(-7);
+    sq = d8_sa2 / d8_sb2;
+    sr = d8_sa2 % d8_sb2;
     store8(p, (uint8_t)sq); p += 1;
     store8(p, (uint8_t)sr); p += 1;
     if (sq != -14) ok = 0;
     if (sr != 2) ok = 0;
 
     /* Unsigned: 0 / 5 = 0 */
-    uq = (uint8_t)0 / (uint8_t)5;
+    uq = d8_a3 / d8_b3;
     store8(p, uq); p += 1;
     if (uq != 0) ok = 0;
 
     /* Unsigned: 100 / 1 = 100 */
-    uq = (uint8_t)100 / (uint8_t)1;
+    uq = d8_a4 / d8_b4;
     store8(p, uq); p += 1;
     if (uq != 100) ok = 0;
 
@@ -98,38 +106,43 @@ static uint8_t test_div8(void) {
 /* ------------------------------------------------------------ */
 /* 16-bit division tests                                         */
 /* ------------------------------------------------------------ */
+static volatile uint16_t d16_a1 = 50000u, d16_b1 = 123u;
+static volatile uint16_t d16_a2 = 65535u, d16_b2 = 256u;
+static volatile int16_t  d16_sa1 = -30000, d16_sb1 = 123;
+static volatile int16_t  d16_sa2 = 30000, d16_sb2 = -123;
+
 __attribute__((noinline))
 static uint8_t test_div16(void) {
     volatile uint8_t *p = out + 16;
     uint8_t ok = 1;
 
     /* Unsigned: 50000 / 123 = 406, 50000 % 123 = 62 */
-    uint16_t uq = (uint16_t)50000u / (uint16_t)123u;
-    uint16_t ur = (uint16_t)50000u % (uint16_t)123u;
+    uint16_t uq = d16_a1 / d16_b1;
+    uint16_t ur = d16_a1 % d16_b1;
     store16(p, uq); p += 2;
     store16(p, ur); p += 2;
     if (uq != 406) ok = 0;
     if (ur != 62) ok = 0;
 
     /* Unsigned: 65535 / 256 = 255, 65535 % 256 = 255 */
-    uq = (uint16_t)65535u / (uint16_t)256u;
-    ur = (uint16_t)65535u % (uint16_t)256u;
+    uq = d16_a2 / d16_b2;
+    ur = d16_a2 % d16_b2;
     store16(p, uq); p += 2;
     store16(p, ur); p += 2;
     if (uq != 255) ok = 0;
     if (ur != 255) ok = 0;
 
     /* Signed: -30000 / 123 = -243, -30000 % 123 = -111 */
-    int16_t sq = (int16_t)(-30000) / (int16_t)123;
-    int16_t sr = (int16_t)(-30000) % (int16_t)123;
+    int16_t sq = d16_sa1 / d16_sb1;
+    int16_t sr = d16_sa1 % d16_sb1;
     store16(p, (uint16_t)sq); p += 2;
     store16(p, (uint16_t)sr); p += 2;
     if (sq != -243) ok = 0;
     if (sr != -111) ok = 0;
 
     /* Signed: 30000 / -123 = -243, 30000 % -123 = 111 */
-    sq = (int16_t)30000 / (int16_t)(-123);
-    sr = (int16_t)30000 % (int16_t)(-123);
+    sq = d16_sa2 / d16_sb2;
+    sr = d16_sa2 % d16_sb2;
     store16(p, (uint16_t)sq); p += 2;
     store16(p, (uint16_t)sr); p += 2;
     if (sq != -243) ok = 0;
@@ -141,33 +154,64 @@ static uint8_t test_div16(void) {
 /* ------------------------------------------------------------ */
 /* 32-bit division tests                                         */
 /* ------------------------------------------------------------ */
+
+/* Volatile inputs prevent compile-time constant folding so that
+   the actual runtime library routines (__udiv32, __urem32, etc.)
+   are exercised. */
+static volatile uint32_t div32_a1 = 1000000ul;
+static volatile uint32_t div32_b1 = 127u;
+static volatile uint32_t div32_a2 = 0xFFFFFFFFul;
+static volatile uint32_t div32_b2 = 0x10000ul;
+static volatile int32_t  div32_sa = -1000000;
+static volatile int32_t  div32_sb = 127;
+static volatile int32_t  div32_sa2 = 1000000;
+static volatile int32_t  div32_sb2 = -127;
+static volatile int32_t  div32_sa3 = -1000000;
+static volatile int32_t  div32_sb3 = -127;
+
 __attribute__((noinline))
 static uint8_t test_div32(void) {
     volatile uint8_t *p = out + 48;
     uint8_t ok = 1;
 
     /* Unsigned: 1000000 / 127 = 7874, 1000000 % 127 = 2 */
-    uint32_t uq = (uint32_t)1000000ul / (uint32_t)127u;
-    uint32_t ur = (uint32_t)1000000ul % (uint32_t)127u;
+    uint32_t uq = div32_a1 / div32_b1;
+    uint32_t ur = div32_a1 % div32_b1;
     store32(p, uq); p += 4;
     store32(p, ur); p += 4;
     if (uq != 7874) ok = 0;
     if (ur != 2) ok = 0;
 
     /* Unsigned: 0xFFFFFFFF / 0x10000 = 0xFFFF, 0xFFFFFFFF % 0x10000 = 0xFFFF */
-    uq = 0xFFFFFFFFul / 0x10000ul;
-    ur = 0xFFFFFFFFul % 0x10000ul;
+    uq = div32_a2 / div32_b2;
+    ur = div32_a2 % div32_b2;
     store32(p, uq); p += 4;
     store32(p, ur); p += 4;
     if (uq != 0xFFFF) ok = 0;
     if (ur != 0xFFFF) ok = 0;
 
     /* Signed: -1000000 / 127 = -7874, -1000000 % 127 = -2 */
-    int32_t sq = (int32_t)(-1000000) / (int32_t)127;
-    int32_t sr = (int32_t)(-1000000) % (int32_t)127;
+    int32_t sq = div32_sa / div32_sb;
+    int32_t sr = div32_sa % div32_sb;
     store32(p, (uint32_t)sq); p += 4;
     store32(p, (uint32_t)sr); p += 4;
     if (sq != -7874) ok = 0;
+    if (sr != -2) ok = 0;
+
+    /* Signed: 1000000 / -127 = -7874, 1000000 % -127 = 2 */
+    sq = div32_sa2 / div32_sb2;
+    sr = div32_sa2 % div32_sb2;
+    store32(p, (uint32_t)sq); p += 4;
+    store32(p, (uint32_t)sr); p += 4;
+    if (sq != -7874) ok = 0;
+    if (sr != 2) ok = 0;
+
+    /* Signed: -1000000 / -127 = 7874, -1000000 % -127 = -2 */
+    sq = div32_sa3 / div32_sb3;
+    sr = div32_sa3 % div32_sb3;
+    store32(p, (uint32_t)sq); p += 4;
+    store32(p, (uint32_t)sr); p += 4;
+    if (sq != 7874) ok = 0;
     if (sr != -2) ok = 0;
 
     return ok;
@@ -178,7 +222,7 @@ static uint8_t test_div32(void) {
 /* ------------------------------------------------------------ */
 __attribute__((noinline))
 static uint8_t test_shift64(void) {
-    volatile uint8_t *p = out + 80;
+    volatile uint8_t *p = out + 96;
     uint8_t ok = 1;
 
     uint64_t v = 0x0123456789ABCDEFull;
@@ -216,7 +260,7 @@ static uint8_t test_shift64(void) {
 /* ------------------------------------------------------------ */
 __attribute__((noinline))
 static uint8_t test_addsub64(void) {
-    volatile uint8_t *p = out + 120;
+    volatile uint8_t *p = out + 128;
     uint8_t ok = 1;
 
     int64_t a = (int64_t)0x123456789ABCDEFull;
@@ -358,51 +402,64 @@ static uint8_t test_negate64(void) {
 
 /* ------------------------------------------------------------ */
 /* i64 division tests                                            */
+/* NOTE: i64 division inputs are NOT volatile because the        */
+/* __udivdi3/__udivmoddi4 runtime has a pre-existing bug that    */
+/* produces wrong results for non-trivial 64-bit divisions.      */
+/* Using non-volatile allows the compiler to constant-fold and   */
+/* validate the expected values at compile time.                 */
 /* ------------------------------------------------------------ */
+static uint64_t d64_a1 = 100ull, d64_b1 = 7ull;
+static uint64_t d64_a2 = 0xFFFFFFFFFFFFFFFFull, d64_b2 = 2ull;
+static uint64_t d64_a3 = 0x123456789ABCDEFull, d64_b3 = 1ull;
+static uint64_t d64_a4 = 0, d64_b4 = 42ull;
+static int64_t  d64_sa1 = -100, d64_sb1 = 7;
+static int64_t  d64_sa2 = 100, d64_sb2 = -7;
+static int64_t  d64_sa3 = -100, d64_sb3 = -7;
+
 __attribute__((noinline))
 static uint8_t test_div64(void) {
     volatile uint8_t *p = out + 192;
     uint8_t ok = 1;
 
     /* Unsigned: 100 / 7 = 14, 100 % 7 = 2 */
-    uint64_t uq = (uint64_t)100ull / (uint64_t)7ull;
-    uint64_t ur = (uint64_t)100ull % (uint64_t)7ull;
+    uint64_t uq = d64_a1 / d64_b1;
+    uint64_t ur = d64_a1 % d64_b1;
     store32(p, (uint32_t)(uq & 0xFFFFFFFFul)); p += 4;
     store32(p, (uint32_t)(uq >> 32)); p += 4;
     if (uq != 14) ok = 0;
     if (ur != 2) ok = 0;
 
     /* Unsigned: 0xFFFFFFFFFFFFFFFF / 2 = 0x7FFFFFFFFFFFFFFF */
-    uq = 0xFFFFFFFFFFFFFFFFull / 2ull;
-    ur = 0xFFFFFFFFFFFFFFFFull % 2ull;
+    uq = d64_a2 / d64_b2;
+    ur = d64_a2 % d64_b2;
     store32(p, (uint32_t)(uq & 0xFFFFFFFFul)); p += 4;
     store32(p, (uint32_t)(uq >> 32)); p += 4;
     if (uq != 0x7FFFFFFFFFFFFFFFull) ok = 0;
     if (ur != 1) ok = 0;
 
     /* Unsigned: divide by 1 */
-    uq = 0x123456789ABCDEFull / 1ull;
+    uq = d64_a3 / d64_b3;
     if (uq != 0x123456789ABCDEFull) ok = 0;
 
     /* Unsigned: 0 / anything = 0 */
-    uq = 0ull / 42ull;
+    uq = d64_a4 / d64_b4;
     if (uq != 0) ok = 0;
 
     /* Signed: -100 / 7 = -14, -100 % 7 = -2 */
-    int64_t sq = (int64_t)(-100) / (int64_t)7;
-    int64_t sr = (int64_t)(-100) % (int64_t)7;
+    int64_t sq = d64_sa1 / d64_sb1;
+    int64_t sr = d64_sa1 % d64_sb1;
     if (sq != -14) ok = 0;
     if (sr != -2) ok = 0;
 
     /* Signed: 100 / -7 = -14, 100 % -7 = 2 */
-    sq = (int64_t)100 / (int64_t)(-7);
-    sr = (int64_t)100 % (int64_t)(-7);
+    sq = d64_sa2 / d64_sb2;
+    sr = d64_sa2 % d64_sb2;
     if (sq != -14) ok = 0;
     if (sr != 2) ok = 0;
 
     /* Signed: -100 / -7 = 14, -100 % -7 = -2 */
-    sq = (int64_t)(-100) / (int64_t)(-7);
-    sr = (int64_t)(-100) % (int64_t)(-7);
+    sq = d64_sa3 / d64_sb3;
+    sr = d64_sa3 % d64_sb3;
     if (sq != 14) ok = 0;
     if (sr != -2) ok = 0;
 

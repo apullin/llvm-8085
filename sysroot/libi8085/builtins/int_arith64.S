@@ -1,724 +1,325 @@
-; Hand-optimised i8085 64-bit add/sub routines.
-;
-; Replaces DAG expansion that produces 500+ instructions for i64
-; add/sub by splitting into 2x i32 operations through the scratch area.
+; Hand-optimised i8085 64-bit arithmetic routines.
 ;
 ; Calling convention (sret for i64 return):
 ;   [SP+2..3]  = sret pointer (where to store 8-byte result)
 ;   [SP+4..11] = a (int64_t, 8 bytes, little-endian)
 ;   [SP+12..19] = b (int64_t, 8 bytes, little-endian)
 ;
-; The 8-byte carry chain add/sub is straightforward on 8085.
+; Key 8085 flag-safety notes:
+;   INX/DCX rp: do NOT affect any flags (carry-safe)
+;   MOV r,r / MOV r,M / MOV M,r: do NOT affect flags
+;   STAX / LDAX: do NOT affect flags
+;   PUSH/POP rp (B/D/H): do NOT affect flags
+;   PUSH/POP PSW: saves/restores A + all flags (including carry)
+;   MVI r,imm: does NOT affect flags
+;   DAD rp: DESTROYS carry flag (sets it to DAD result carry)
+;   XCHG: does NOT affect flags
 
 
 ; ===================================================================
-; __adddi3: i64 add
+; __adddi3: i64 add  --  optimised two-pass approach
 ;   void __adddi3(int64_t *result, int64_t a, int64_t b)
 ;   [SP+2..3]  = sret pointer
 ;   [SP+4..11] = a (8 bytes, little-endian)
 ;   [SP+12..19] = b (8 bytes, little-endian)
 ;
 ; Performs result = a + b using an 8-byte carry chain.
+;
+; Strategy: two 4-byte passes. Each pass pre-loads one operand's
+; bytes into registers (B,C + stack staging for 2 more bytes), then
+; walks the other operand with INX H (flag-safe). Result bytes
+; are written to sret via STAX D (flag-safe) as we go.
+;
+; Uses only 5 LXI+DAD SP total (vs 17 in the naive per-byte
+; approach) and zero PUSH/POP PSW for carry preservation.
+; Carry is bridged between passes via the ADI 0xFF trick.
 ; ===================================================================
 	.text
 	.globl	__adddi3
 	.type	__adddi3,@function
 __adddi3:
-	; Load b[0..3] into registers C,B,E,D
+	; ---- Stage b[0..3] into B,C + stack ----
 	lxi	h, 12
-	dad	sp
-	mov	c, m		; b[0]
+	dad	sp		; HL = &b[0]           [DAD #1]
+	mov	c, m		; C = b[0]
 	inx	h
-	mov	b, m		; b[1]
+	mov	b, m		; B = b[1]
 	inx	h
-	mov	e, m		; b[2]
+	mov	a, m		; A = b[2]
 	inx	h
-	mov	d, m		; b[3]
+	mov	h, m		; H = b[3]
+	mov	l, a		; L = b[2]
+	push	h		; push b[3](H), b[2](L) for mid-chain POP  [SP -= 2]
 
-	; Add a[0..3] + b[0..3] with carry chain
-	lxi	h, 4
-	dad	sp		; -> a[0]
-	mov	a, m
-	add	c		; a[0] + b[0]
-	mov	c, a		; result[0] in C
-	inx	h
-	mov	a, m
-	adc	b		; a[1] + b[1] + carry
-	mov	b, a		; result[1] in B
-	inx	h
-	mov	a, m
-	adc	e		; a[2] + b[2] + carry
-	mov	e, a		; result[2] in E
-	inx	h
-	mov	a, m
-	adc	d		; a[3] + b[3] + carry
-	mov	d, a		; result[3] in D
-
-	; Save carry flag and result[0..3]
-	; We need to continue the carry chain for bytes 4-7.
-	; PUSH does NOT affect flags on 8085, so we can save result
-	; and continue with carry intact.
-	push	b		; save result[0..1] (C, B)
-	push	d		; save result[2..3] (E, D)
-	; Carry is still valid after PUSH
-
-	; Load b[4..7]
-	; After 2 pushes, stack shifted by 4:
-	;   b[4] at original [SP+16], now [SP+16+4=20]
-	lxi	h, 20
-	dad	sp		; -> b[4] -- BUT DAD DESTROYS CARRY!
-
-	; DAD destroys carry. We need a different approach.
-	; Let me save the carry explicitly.
-
-	pop	d		; restore result[2..3]
-	pop	b		; restore result[0..1]
-
-	; Restart with a different strategy.
-	; Strategy: do the full 8-byte add without breaking the carry chain.
-	; We need to avoid DAD SP between carry-producing ADD/ADC operations.
-	;
-	; Approach: pre-load pointers, or use PUSH/POP to save partial
-	; results while preserving carry via the PSW register.
-	;
-	; Better approach: compute bytes 0-3 first, save the carry,
-	; then compute bytes 4-7.
-
-	; Actually, let me use the approach from int_mul.S __mulsi32:
-	; pre-load values from both operands into registers, then do
-	; the add chain without any DAD SP in between.
-
-	; We only have A,B,C,D,E,H,L. For 4 bytes of each operand
-	; that's 8 values, too many for registers.
-	;
-	; Alternative: use the stack for intermediate storage.
-	; Compute bytes 0-3, push result, then compute bytes 4-7.
-
-	; Load a[0..3]
-	lxi	h, 4
-	dad	sp
-	mov	c, m		; a[0]
-	inx	h
-	mov	b, m		; a[1]
-	inx	h
-	mov	e, m		; a[2]
-	inx	h
-	mov	d, m		; a[3]
-
-	; Add b[0..3] to a[0..3]
-	lxi	h, 12
-	dad	sp		; -> b[0]
-	mov	a, c
-	add	m		; a[0] + b[0]
-	mov	c, a
-	inx	h
-	mov	a, b
-	adc	m		; a[1] + b[1] + carry
-	mov	b, a
-	inx	h
-	mov	a, e
-	adc	m		; a[2] + b[2] + carry
-	mov	e, a
-	inx	h
-	mov	a, d
-	adc	m		; a[3] + b[3] + carry
-	mov	d, a
-
-	; Carry from byte 3 is live. Save it in a register.
-	; Push result[0..3] and carry.
-	push	psw		; save A (result[3]) and carry flag
-	push	d		; save result[2..3] (E=r2, D=r3)
-	push	b		; save result[0..1] (C=r0, B=r1)
-
-	; Now compute bytes 4-7.
-	; Stack shifted +6. a[4..7] at original SP+8, now SP+14.
-	; b[4..7] at original SP+16, now SP+22.
-	lxi	h, 14
-	dad	sp		; -> a[4]
-	mov	c, m		; a[4]
-	inx	h
-	mov	b, m		; a[5]
-	inx	h
-	mov	e, m		; a[6]
-	inx	h
-	mov	d, m		; a[7]
-
-	lxi	h, 22
-	dad	sp		; -> b[4]
-	; Restore carry from bytes 0-3
-	; The carry is in the PSW we pushed. We need it before continuing.
-	; But DAD already destroyed carry. We need to reload carry.
-	; The carry is saved in PSW at [SP+4..5] (after push b, push d).
-	; Actually PSW was pushed first, then d, then b.
-	; Stack: [SP+0..1]=BC (r0,r1), [SP+2..3]=DE (r2,r3), [SP+4..5]=PSW (A,flags)
-	; We can't pop PSW without disturbing BC/DE.
-	;
-	; Different approach: use a carry byte.
-
-	; Pop everything and redo with explicit carry tracking.
-	pop	b
-	pop	d
-	pop	psw		; A = result[3], flags have carry
-
-	; Save carry as a byte: 0 or 1
-	mvi	h, 0
-	jnc	.Ladd64_no_carry
-	mvi	h, 1
-.Ladd64_no_carry:
-	; H = carry from bytes 0-3
-	; Result bytes 0-3: C=r0, B=r1, E=r2, D=r3
-
-	; Save result[0..3] on stack
-	push	d		; result[2..3]
-	push	b		; result[0..1]
-	; Save carry byte
-	push	h		; H = carry (L = garbage)
-
-	; Stack shifted +6:
-	;   [SP+0..1] = carry byte (H)
-	;   [SP+2..3] = result[0..1]
-	;   [SP+4..5] = result[2..3]
-	;   [SP+6..7] = return addr
-	;   [SP+8..9] = sret
-	;   [SP+10..17] = a
-	;   [SP+18..25] = b
-
-	; Load a[4..7]
-	lxi	h, 14
-	dad	sp		; a[4] at SP+10+4=14
-	mov	c, m
-	inx	h
-	mov	b, m
-	inx	h
-	mov	e, m
-	inx	h
-	mov	d, m
-
-	; Add b[4..7]
-	lxi	h, 22
-	dad	sp		; b[4] at SP+18+4=22
-
-	; First add the saved carry to c (a[4])
-	; Then add b[4..7] with carry chain
-	; Restore carry byte
-	lxi	h, 0
-	dad	sp
-	mov	a, m		; carry byte in H position (high byte of push h)
-	; Actually push h pushes H at SP+1 and L at SP+0 (8085 is little-endian for stack)
-	; Wait, 8085 PUSH rp pushes high byte first (at SP-1), low byte second (at SP-2).
-	; So after PUSH H: [SP+0]=L, [SP+1]=H
-	inx	h		; -> SP+1 = H = carry byte
-	mov	a, m
-
-	; Now add carry to a[4], then add b[4..7]
-	add	c		; a[4] + carry_from_lower
-	mov	c, a
-
-	; Now add b[4..7]
-	lxi	h, 22
-	dad	sp		; b[4]
-	mov	a, c
-	adc	m		; += b[4] (with potential carry from add above)
-	; Wait, that's wrong. The ADD above might produce carry too.
-	; We need: a[4] + b[4] + carry_from_byte3.
-	; Let me redo.
-
-	; Pop carry and start over for bytes 4-7
-	pop	h		; discard carry push
-	pop	b		; result[0..1]
-	pop	d		; result[2..3]
-
-	; Save result[0..3] back
-	push	d
-	push	b
-
-	; Now we need to redo the carry propagation.
-	; We know result[0..3] in registers. Recompute bytes 4-7.
-	; The trick: we saved the carry as a byte above. Let me try
-	; a completely different approach.
-
-	; ===== RESTART WITH CLEAN APPROACH =====
-	; Pop everything we just pushed.
-	pop	b		; discard
-	pop	d		; discard
-
-	; Strategy: write result directly to sret pointer as we go.
-	; This avoids needing to save intermediate results.
-
-	; Load sret pointer
-	lxi	h, 2
-	dad	sp
+	; ---- Load sret pointer into DE ----
+	lxi	h, 4		; sret at original SP+2, now SP+2+2 = 4
+	dad	sp		;                       [DAD #2]
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret pointer
-	push	d		; save sret pointer
 
-	; Stack shifted +2:
-	;   [SP+0..1] = sret pointer
-	;   [SP+2..3] = return addr
-	;   [SP+4..5] = sret (original arg)
-	;   [SP+6..13] = a
-	;   [SP+14..21] = b
+	; ---- Point HL to a[0] ----
+	lxi	h, 6		; a[0] at original SP+4, now SP+4+2 = 6
+	dad	sp		; HL = &a[0]           [DAD #3]
 
-	; Load a[0..3] and b[0..3], add with carry chain,
-	; write to sret as we go. Use HL to point to memory.
-
-	; Load all 4 bytes of b[0..3] into registers
-	lxi	h, 14
-	dad	sp
-	mov	c, m		; b[0]
-	inx	h
-	mov	b, m		; b[1]
-	; Can only hold 2 of b in registers. Need to use memory reads.
-
-	; Different approach: use HL to walk through a[] while holding
-	; b values. But we need carry chain continuity.
-
-	; Simplest correct approach: read a[i] and b[i] one at a time,
-	; add, store result.
-
-	; Point to a[0]
-	lxi	h, 6
-	dad	sp
-	; a[0] is at this address. b[0] is at [SP+14].
-	; sret is in DE (on stack at [SP+0..1]).
-
-	; Read a[0]
-	mov	a, m		; a[0]
-	push	h		; save pointer to a (+2 shift to SP)
-
-	; Read b[0]
-	lxi	h, 16		; b[0] at SP+14+2=16
-	dad	sp
-	add	m		; a[0] + b[0]
-
-	; Write to sret[0]
-	pop	h		; restore a pointer
-	push	psw		; save A and carry (+2 shift)
-
-	; Get sret pointer
-	lxi	h, 2		; sret at SP+0+2=2
-	dad	sp
-	mov	e, m
-	inx	h
-	mov	d, m		; DE = sret
-
-	pop	psw		; restore result byte and carry
-	stax	d		; [sret+0] = result
-	; But carry is now lost after POP PSW and STAX...
-	; Actually POP PSW restores flags (including carry).
-	; And STAX does not affect flags.
-	; So carry should still be valid!
-	; Wait, does POP PSW work on 8085? Yes. POP PSW pops A and flags.
-	; So after POP PSW, the carry flag is the one we saved.
-	; STAX does not affect flags. So carry is preserved.
-
-	; But we then need to read a[1] and b[1] without losing carry.
-	; LXI and DAD will destroy carry.
-
-	; This approach is too complex with carry preservation.
-	; Let me use a fundamentally different strategy.
-
-	; ===== FINAL CLEAN APPROACH =====
-	; Pop saved sret pointer
-	pop	d		; restore stack to original
-
-	; Use a 2-pass approach:
-	; Pass 1: add bytes 0-3, save result and carry
-	; Pass 2: add bytes 4-7 starting with saved carry
-
-	; ---- Pass 1: bytes 0-3 ----
-	; Read a[0..3] into stack, read b[0..3] into registers, add.
-
-	; Actually simplest: load a[0..3], push. Load b[0..3], add to
-	; popped values. We just need to avoid DAD SP during the carry chain.
-
-	; Load b[0..3] from stack
-	lxi	h, 12
-	dad	sp
-	mov	c, m		; b[0]
-	inx	h
-	mov	b, m		; b[1]
-	inx	h
-	mov	e, m		; b[2]
-	inx	h
-	mov	d, m		; b[3]
-	; Save b[2..3]
-	push	d		; save b[2..3] on stack
-
-	; Load a[0..3] -- note SP shifted +2
-	lxi	h, 6		; a[0] at SP+4+2=6
-	dad	sp
-	; a[0]
-	mov	a, m
-	add	c		; a[0] + b[0]
-	mov	e, a		; E = result[0]
-	inx	h
-	; a[1]
-	mov	a, m
-	adc	b		; a[1] + b[1] + carry
-	mov	d, a		; D = result[1]
-	; Now we need a[2]+b[2] and a[3]+b[3].
-	; b[2..3] are on top of stack. a[2..3] are at [HL+1..2].
-	; Carry is live. We CANNOT use DAD SP. But we can use INX H.
-	inx	h		; -> a[2]
-	; Pop b[2..3] back. POP does not affect flags!
-	; Wait: does POP affect flags on 8085? POP rp does NOT affect flags
-	; for any register pair EXCEPT PSW. So POP B / POP D do not touch carry.
-	; But we saved b[2..3] in D:E pair position via PUSH D. And D,E now hold
-	; result[0..1]. We need different registers.
-	; Actually we pushed D (containing b[2..3]) to the stack. We can't pop
-	; it into D/E because those hold result[0..1] now.
-
-	; Hmm. Let me pop b[2..3] into BC (overwriting b[0..1] which we no longer need).
-	; But POP B will overwrite B and C.
-	; B holds nothing useful now. C held b[0], no longer needed.
-	; result[0] is in E, result[1] is in D.
-	pop	b		; B = b[3], C = b[2] (carry preserved!)
-
-	; Continue carry chain
-	mov	a, m		; a[2]
-	adc	c		; a[2] + b[2] + carry
-	mov	c, a		; save temporarily
-	; result[2] in C
-	inx	h
-	mov	a, m		; a[3]
-	adc	b		; a[3] + b[3] + carry
-	mov	b, a		; result[3] in B
-	; Carry from byte 3 is in flags
-
-	; Save carry from pass 1
-	; Push result and carry
-	push	psw		; save carry (and A = result[3])
-	push	b		; result[2..3] (C=r2, B=r3)
-	push	d		; result[0..1] (E=r0, D=r1)
-
-	; Stack layout after pushes (+6):
-	;   [SP+0..1] = result[0..1] (E=r0 at SP+0, D=r1 at SP+1)
-	;   [SP+2..3] = result[2..3] (C=r2 at SP+2, B=r3 at SP+3)
-	;   [SP+4..5] = PSW (carry)
-	;   [SP+6..7] = return addr
-	;   [SP+8..9] = sret
-	;   [SP+10..17] = a
-	;   [SP+18..25] = b
-
-	; ---- Pass 2: bytes 4-7 ----
-	; Load b[4..7]
-	lxi	h, 22
-	dad	sp
-	mov	c, m		; b[4]
-	inx	h
-	mov	b, m		; b[5]
-	inx	h
-	mov	e, m		; b[6]
-	inx	h
-	mov	d, m		; b[7]
-	push	d		; save b[6..7] (+2 more shift)
-
-	; Load a[4..7] at SP+10+4+2=16... wait SP shifted by 8 now.
-	lxi	h, 16		; a[4] at SP+10+4+2=16
-	dad	sp
-
-	; Restore carry from pass 1
-	; PSW is at [SP+4+2=6]
-	; We can't pop it because of stack layout.
-	; Read it from the stack: the flags byte is at SP+6+0 = SP+6
-	; PUSH PSW stores: [SP+0] = flags, [SP+1] = A
-	; So carry bit is in the flags byte at the stack location.
-	; Actually, we can use a simpler approach:
-	; Load the flags byte and test it.
-	; Or, pop PSW now, preserving carry.
-
-	; Stack: [SP+0..1]=b[6..7], [SP+2..3]=r[0..1], [SP+4..5]=r[2..3], [SP+6..7]=PSW
-	; Actually the stack is [result0_1, result2_3, psw, ...] plus our new push of b67.
-	; So: [SP+0..1] = b[6..7] push, [SP+2..3] = result[0..1], [SP+4..5]=result[2..3], [SP+6..7]=PSW
-
-	; Let's use a different approach. Store carry as 0/1 in a scratch byte.
-	; Undo and redo.
-	pop	d		; restore b[6..7]
-	pop	h		; discard result[0..1]
-	pop	h		; discard result[2..3]
-	pop	psw		; restore carry flag (and A)
-
-	; Save carry as 0 or 1
-	mvi	a, 0
-	adc	a		; A = carry (0 or 1)
-	push	psw		; save carry byte
-
-	; Re-push result
-	; We lost result. This approach is broken.
-	; Let me start completely from scratch with a working strategy.
-	pop	psw		; undo
-
-	; ============================================================
-	; DEFINITIVE APPROACH: Write result directly to sret as we go.
-	; Use PSW push/pop to preserve carry across DAD SP instructions.
-	; Key insight: POP PSW restores the carry flag, and STAX / MOV M,r
-	; do NOT affect flags.
-	; ============================================================
-
-	; Load sret pointer into DE
-	lxi	h, 2
-	dad	sp
-	mov	e, m
-	inx	h
-	mov	d, m		; DE = sret
-
-	; We'll use HL to read from a[] and b[], and DE (sret) to write.
-	; Strategy for each byte pair:
-	;   1. LXI H, offset_of_b[i] / DAD SP  -- load b[i]
-	;   2. MOV C, M                          -- C = b[i]
-	;   3. LXI H, offset_of_a[i] / DAD SP  -- load a[i]
-	;   4. [restore carry via POP PSW if not first byte]
-	;   5. ADC M  (or ADD M for first byte)  -- A = a[i] + b[i] [+ carry]
-	;   6. STAX D / INX D                    -- write to sret, advance
-	;   7. PUSH PSW                           -- save carry
-	;
-	; This uses 2x DAD SP per byte, which is inefficient but correct.
-	; But wait, DAD SP destroys carry, and we use it between step 4 and 5.
-	; So we need to load BOTH a[i] and b[i] before the ADD/ADC.
-
-	; Better: load b[i] into a register, then load a[i] into A, then add.
-	; After step 3 (DAD SP), carry is destroyed but we haven't started
-	; the add chain yet. We restore carry (POP PSW) just before ADC.
-
-	; Byte 0: no carry to restore
-	lxi	h, 12		; b[0]
-	dad	sp
-	mov	c, m		; C = b[0]
-	lxi	h, 4		; a[0]
-	dad	sp
+	; ========================================================
+	; Carry chain: bytes 0-3 (completely unbroken)
+	; All instructions below are flag-safe until noted.
+	; ========================================================
 	mov	a, m		; A = a[0]
-	add	c		; A = a[0] + b[0]
+	add	c		; a[0] + b[0]
 	stax	d		; sret[0] = result
-	inx	d
-	push	psw		; save carry
+	inx	d		; DE -> sret+1
+	inx	h		; HL -> a[1]
 
-	; Byte 1
-	lxi	h, 15		; b[1] at SP+12+1 +2 for push = 15
-	dad	sp
-	mov	c, m
-	lxi	h, 7		; a[1] at SP+4+1 +2 = 7
-	dad	sp
-	pop	psw		; restore carry (A is overwritten, that's ok)
 	mov	a, m		; A = a[1]
-	adc	c		; A = a[1] + b[1] + carry
-	stax	d
-	inx	d
-	push	psw		; save carry
+	adc	b		; a[1] + b[1] + carry
+	stax	d		; sret[1]
+	inx	d		; DE -> sret+2
+	inx	h		; HL -> a[2]
 
-	; Byte 2
-	lxi	h, 16		; b[2] at SP+12+2 +2 = 16
-	dad	sp
-	mov	c, m
-	lxi	h, 8		; a[2] at SP+4+2 +2 = 8
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	inx	d
-	push	psw
+	; POP B does NOT affect flags -- carry is preserved!
+	pop	b		; C = b[2], B = b[3]   [SP back to original]
 
-	; Byte 3
-	lxi	h, 17		; b[3] at SP+12+3 +2 = 17
-	dad	sp
-	mov	c, m
-	lxi	h, 9		; a[3] at SP+4+3 +2 = 9
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	inx	d
-	push	psw
+	mov	a, m		; A = a[2]
+	adc	c		; a[2] + b[2] + carry
+	stax	d		; sret[2]
+	inx	d		; DE -> sret+3
+	inx	h		; HL -> a[3]
 
-	; Byte 4 -- sret pointer (DE) now at sret+4
-	; But STAX only works with BC and DE pair. DE is our write pointer.
-	; At byte 4, DE = sret+4. We can continue using STAX D.
-	; Wait, but we need to load b[4] using LXI H / DAD SP. That's fine.
-	; But at byte 4+, DE has sret+4. If we do INX D and STAX D, we're fine.
-	; STAX D and INX D don't affect flags, so after POP PSW the carry is preserved.
+	mov	a, m		; A = a[3]
+	adc	b		; a[3] + b[3] + carry
+	stax	d		; sret[3]
+	inx	d		; DE -> sret+4
 
-	lxi	h, 18		; b[4] at SP+12+4 +2 = 18
-	dad	sp
-	mov	c, m
-	lxi	h, 10		; a[4] at SP+4+4 +2 = 10
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	inx	d
-	push	psw
+	; ========================================================
+	; Bridge: capture carry as a byte value (0 or 1)
+	; MVI does NOT affect flags on 8085.
+	; ========================================================
+	mvi	a, 0		; A = 0 (flags untouched)
+	adc	a		; A = 0 + 0 + carry = carry_byte (0 or 1)
+	mov	c, a		; C = carry_byte
 
-	; Byte 5
-	lxi	h, 19		; b[5] at SP+12+5 +2 = 19
-	dad	sp
-	mov	c, m
-	lxi	h, 11		; a[5] at SP+4+5 +2 = 11
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	inx	d
-	push	psw
+	; ---- Stage b[4..7] into B,C + stack ----
+	; Push carry_byte first (in BC) so we can reuse B,C for b values.
+	push	b		; save carry_byte(C) on stack   [SP -= 2]
 
-	; Byte 6 -- at this point DE = sret+6
-	; STAX only works with BC and DE. We're using DE for sret pointer.
-	; Let's switch to using MOV M,A with HL.
-	; Save DE (sret+6) to stack, then use HL for writing.
-	; Actually, STAX D still works for byte 6. Continue.
-	lxi	h, 20		; b[6] at SP+12+6 +2 = 20
-	dad	sp
-	mov	c, m
-	lxi	h, 12		; a[6] at SP+4+6 +2 = 12
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	inx	d
-	push	psw
+	lxi	h, 18		; b[4] at original SP+16, now SP+16+2 = 18
+	dad	sp		; HL = &b[4]                    [DAD #4]
+	mov	c, m		; C = b[4]
+	inx	h
+	mov	b, m		; B = b[5]
+	inx	h
+	mov	a, m		; A = b[6]
+	inx	h
+	mov	h, m		; H = b[7]
+	mov	l, a		; L = b[6]
+	push	h		; push b[7](H), b[6](L)        [SP -= 4 total]
 
-	; Byte 7 -- DE = sret+7
-	lxi	h, 21		; b[7] at SP+12+7 +2 = 21
-	dad	sp
-	mov	c, m
-	lxi	h, 13		; a[7] at SP+4+7 +2 = 13
-	dad	sp
-	pop	psw
-	mov	a, m
-	adc	c
-	stax	d
-	; No need to save carry anymore
+	; ---- Recover carry_byte and navigate to a[4] ----
+	; Stack layout (SP = original - 4):
+	;   [SP+0] = b[6](L), [SP+1] = b[7](H)   -- b67 push
+	;   [SP+2] = carry_byte(C), [SP+3] = 0(B) -- carry push
+	;   [SP+4..5] = return addr
+	;   [SP+6..7] = sret arg
+	;   [SP+8..15] = a[0..7]
+	;   [SP+16..23] = b[0..7]
+
+	lxi	h, 2		; carry_byte is at SP+2
+	dad	sp		;                               [DAD #5]
+	mov	a, m		; A = carry_byte (0 or 1)
+
+	; Convert carry_byte back to carry flag:
+	; ADI 0xFF: if A=0 -> 0+0xFF=0xFF, carry=0
+	;           if A=1 -> 1+0xFF=0x00, carry=1
+	adi	0xFF		; carry flag = (carry_byte was 1)
+
+	; Navigate to a[4] using INX H (flag-safe, preserves carry).
+	; HL is at SP+2. a[4] is at SP+12. Delta = 10.
+	inx	h		; SP+3
+	inx	h		; SP+4
+	inx	h		; SP+5
+	inx	h		; SP+6
+	inx	h		; SP+7
+	inx	h		; SP+8
+	inx	h		; SP+9
+	inx	h		; SP+10
+	inx	h		; SP+11
+	inx	h		; SP+12 = &a[4]
+
+	; ========================================================
+	; Carry chain: bytes 4-7 (completely unbroken)
+	; Carry flag restored from carry_byte above.
+	; ========================================================
+	mov	a, m		; A = a[4]
+	adc	c		; a[4] + b[4] + carry
+	stax	d		; sret[4]
+	inx	d		; DE -> sret+5
+	inx	h		; HL -> a[5]
+
+	mov	a, m		; A = a[5]
+	adc	b		; a[5] + b[5] + carry
+	stax	d		; sret[5]
+	inx	d		; DE -> sret+6
+	inx	h		; HL -> a[6]
+
+	; POP B for b[6..7] -- flag-safe!
+	pop	b		; C = b[6], B = b[7]   [SP = original - 2]
+
+	mov	a, m		; A = a[6]
+	adc	c		; a[6] + b[6] + carry
+	stax	d		; sret[6]
+	inx	d		; DE -> sret+7
+	inx	h		; HL -> a[7]
+
+	mov	a, m		; A = a[7]
+	adc	b		; a[7] + b[7] + carry
+	stax	d		; sret[7]
+
+	; ---- Clean up stack ----
+	; The carry_byte push is still on the stack. Pop to restore SP.
+	pop	b		; discard carry push   [SP back to original]
 
 	ret
 	.size	__adddi3, .-__adddi3
 
 
 ; ===================================================================
-; __subdi3: i64 subtract
+; __subdi3: i64 subtract  --  optimised two-pass approach
 ;   void __subdi3(int64_t *result, int64_t a, int64_t b)
 ;   [SP+2..3]  = sret pointer
 ;   [SP+4..11] = a (8 bytes, little-endian)
 ;   [SP+12..19] = b (8 bytes, little-endian)
 ;
 ; Performs result = a - b using an 8-byte borrow chain.
+; Same structure as __adddi3 but with SUB/SBB instead of ADD/ADC.
 ; ===================================================================
 	.globl	__subdi3
 	.type	__subdi3,@function
 __subdi3:
-	; Same strategy as __adddi3 but using SUB/SBB instead of ADD/ADC.
+	; ---- Stage b[0..3] ----
+	lxi	h, 12
+	dad	sp		; HL = &b[0]
+	mov	c, m		; C = b[0]
+	inx	h
+	mov	b, m		; B = b[1]
+	inx	h
+	mov	a, m		; A = b[2]
+	inx	h
+	mov	h, m		; H = b[3]
+	mov	l, a		; L = b[2]
+	push	h		; push b[3](H), b[2](L)  [SP -= 2]
 
-	; Load sret pointer into DE
-	lxi	h, 2
+	; ---- Load sret pointer into DE ----
+	lxi	h, 4		; sret at SP+2+2 = 4
 	dad	sp
 	mov	e, m
 	inx	h
-	mov	d, m
+	mov	d, m		; DE = sret pointer
 
-	; Byte 0
-	lxi	h, 12		; b[0]
-	dad	sp
-	mov	c, m
-	lxi	h, 4		; a[0]
-	dad	sp
-	mov	a, m
-	sub	c		; A = a[0] - b[0]
-	stax	d
+	; ---- Point HL to a[0] ----
+	lxi	h, 6		; a[0] at SP+4+2 = 6
+	dad	sp		; HL = &a[0]
+
+	; ========================================================
+	; Borrow chain: bytes 0-3 (completely unbroken)
+	; ========================================================
+	mov	a, m		; A = a[0]
+	sub	c		; a[0] - b[0]
+	stax	d		; sret[0]
 	inx	d
-	push	psw		; save borrow
+	inx	h
 
-	; Byte 1
-	lxi	h, 15		; b[1], +2 for push
-	dad	sp
-	mov	c, m
-	lxi	h, 7		; a[1], +2 for push
-	dad	sp
-	pop	psw		; restore borrow
-	mov	a, m
-	sbb	c		; A = a[1] - b[1] - borrow
-	stax	d
+	mov	a, m		; A = a[1]
+	sbb	b		; a[1] - b[1] - borrow
+	stax	d		; sret[1]
 	inx	d
-	push	psw
+	inx	h
 
-	; Byte 2
-	lxi	h, 16
-	dad	sp
-	mov	c, m
-	lxi	h, 8
-	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	pop	b		; C = b[2], B = b[3]  (flag-safe)  [SP back to original]
+
+	mov	a, m		; A = a[2]
+	sbb	c		; a[2] - b[2] - borrow
+	stax	d		; sret[2]
 	inx	d
-	push	psw
+	inx	h
 
-	; Byte 3
-	lxi	h, 17
-	dad	sp
-	mov	c, m
-	lxi	h, 9
-	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	mov	a, m		; A = a[3]
+	sbb	b		; a[3] - b[3] - borrow
+	stax	d		; sret[3]
 	inx	d
-	push	psw
 
-	; Byte 4
-	lxi	h, 18
+	; ========================================================
+	; Bridge: capture borrow as byte
+	; ========================================================
+	mvi	a, 0
+	adc	a		; A = borrow_byte (0 or 1)
+	mov	c, a
+
+	; ---- Stage b[4..7] ----
+	push	b		; save borrow_byte  [SP -= 2]
+
+	lxi	h, 18		; b[4] at SP+16+2 = 18
 	dad	sp
-	mov	c, m
-	lxi	h, 10
+	mov	c, m		; C = b[4]
+	inx	h
+	mov	b, m		; B = b[5]
+	inx	h
+	mov	a, m		; A = b[6]
+	inx	h
+	mov	h, m		; H = b[7]
+	mov	l, a		; L = b[6]
+	push	h		; push b[7](H), b[6](L)  [SP -= 4 total]
+
+	; ---- Recover borrow_byte and restore borrow flag ----
+	lxi	h, 2
 	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	mov	a, m		; A = borrow_byte
+
+	; Restore borrow flag: ADI 0xFF sets carry iff borrow_byte was 1
+	adi	0xFF
+
+	; Navigate to a[4] via INX H (flag-safe), 10 steps from SP+2
+	inx	h		; SP+3
+	inx	h		; SP+4
+	inx	h		; SP+5
+	inx	h		; SP+6
+	inx	h		; SP+7
+	inx	h		; SP+8
+	inx	h		; SP+9
+	inx	h		; SP+10
+	inx	h		; SP+11
+	inx	h		; SP+12 = &a[4]
+
+	; ========================================================
+	; Borrow chain: bytes 4-7 (completely unbroken)
+	; ========================================================
+	mov	a, m		; A = a[4]
+	sbb	c		; a[4] - b[4] - borrow
+	stax	d		; sret[4]
 	inx	d
-	push	psw
+	inx	h
 
-	; Byte 5
-	lxi	h, 19
-	dad	sp
-	mov	c, m
-	lxi	h, 11
-	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	mov	a, m		; A = a[5]
+	sbb	b		; a[5] - b[5] - borrow
+	stax	d		; sret[5]
 	inx	d
-	push	psw
+	inx	h
 
-	; Byte 6
-	lxi	h, 20
-	dad	sp
-	mov	c, m
-	lxi	h, 12
-	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	pop	b		; C = b[6], B = b[7]  (flag-safe)  [SP -= 2]
+
+	mov	a, m		; A = a[6]
+	sbb	c		; a[6] - b[6] - borrow
+	stax	d		; sret[6]
 	inx	d
-	push	psw
+	inx	h
 
-	; Byte 7
-	lxi	h, 21
-	dad	sp
-	mov	c, m
-	lxi	h, 13
-	dad	sp
-	pop	psw
-	mov	a, m
-	sbb	c
-	stax	d
+	mov	a, m		; A = a[7]
+	sbb	b		; a[7] - b[7] - borrow
+	stax	d		; sret[7]
+
+	; Clean up stack
+	pop	b		; discard borrow push  [SP back to original]
 
 	ret
 	.size	__subdi3, .-__subdi3
