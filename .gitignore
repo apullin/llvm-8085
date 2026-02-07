@@ -1,7 +1,7 @@
 .DS_Store
 
 # LLVM forks live as separate repos/submodules
-llvm-project/
+# llvm-project/ is now a proper submodule
 8085-llvm/
 i8085-trace/
 

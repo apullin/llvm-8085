@@ -1,0 +1,4 @@
+[submodule "llvm-project"]
+	path = llvm-project
+	url = https://github.com/apullin/llvm-project.git
+	branch = i8085
