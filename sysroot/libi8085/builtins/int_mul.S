@@ -142,30 +142,32 @@ __mul16:
 ;   [SP+6..9]  = b  (4 bytes, little-endian)
 ;   Returns in BC:DE  (C=byte0, B=byte1, E=byte2, D=byte3).
 ;
-; Strategy: allocate 4 bytes on the stack for the result.
+; Strategy: keep result in registers BC:DE (no stack allocation).
 ; Use a as the multiplier (shift right, test LSB, early exit).
 ; Use b as the multiplicand (shift left each iteration).
 ; Both a and b are modified in-place on the caller's stack frame
 ; (permitted: caller owns that memory after pushing args).
+;
+; The result accumulation uses register-to-memory adds (ADD M /
+; ADC M) instead of loading the multiplicand into registers and
+; then adding byte-by-byte through a stack-based result.  This
+; saves ~9 instructions and ~78 cycles per add iteration.
 ; ===================================================================
 	.globl	__mul32
 	.type	__mul32,@function
 __mul32:
-	; Allocate 4 bytes for result, initialised to 0.
-	lxi	h, 0
-	push	h		; result[2..3] = 0  (high word)
-	push	h		; result[0..1] = 0  (low word)
+	; Result lives in BC:DE -- no stack allocation needed.
+	lxi	b, 0		; result bytes 0-1 (C=byte0, B=byte1)
+	lxi	d, 0		; result bytes 2-3 (E=byte2, D=byte3)
 
 	; Stack layout (offsets from current SP):
-	;   [SP+ 0.. 1] = result_lo
-	;   [SP+ 2.. 3] = result_hi
-	;   [SP+ 4.. 5] = return address
-	;   [SP+ 6.. 9] = a  (multiplier,    shifts right)
-	;   [SP+10..13] = b  (multiplicand, shifts left)
+	;   [SP+0..1] = return address
+	;   [SP+2..5] = a  (multiplier,    shifts right)
+	;   [SP+6..9] = b  (multiplicand, shifts left)
 
 .Lm32_loop:
 	; --- Check if multiplier (a) == 0 ---
-	lxi	h, 6
+	lxi	h, 2
 	dad	sp
 	mov	a, m		; a[0]
 	inx	h
@@ -177,51 +179,43 @@ __mul32:
 	jz	.Lm32_done
 
 	; --- Test bit 0 of multiplier ---
-	lxi	h, 6
-	dad	sp
+	; HL currently -> a[3]; walk back to a[0] (DCX is 6 cyc vs
+	; LXI+DAD SP = 20 cyc, saves 2 cycles per iteration).
+	dcx	h		; -> a[2]
+	dcx	h		; -> a[1]
+	dcx	h		; -> a[0]
 	mov	a, m
 	ani	1
 	jz	.Lm32_no_add
 
-	; --- result += multiplicand (byte-by-byte with carry) ---
-	; Load multiplicand (b) into B,C,D,E
-	lxi	h, 10
-	dad	sp
-	mov	c, m		; b[0]
-	inx	h
-	mov	b, m		; b[1]
-	inx	h
-	mov	e, m		; b[2]
-	inx	h
-	mov	d, m		; b[3]
+	; --- result (BC:DE) += multiplicand (on stack) ---
+	; Add b[0..3] directly from memory into register result.
+	lxi	h, 6
+	dad	sp		; HL -> b[0]
 
-	; Add BCDE to result[0..3]
-	lxi	h, 0
-	dad	sp		; HL -> result[0]
+	mov	a, c
+	add	m		; C += b[0]
+	mov	c, a
 
-	mov	a, m
-	add	c
-	mov	m, a		; result[0] += b[0]
+	inx	h		; -> b[1]
+	mov	a, b
+	adc	m		; B += b[1] + carry
+	mov	b, a
 
-	inx	h
-	mov	a, m
-	adc	b
-	mov	m, a		; result[1] += b[1] + carry
+	inx	h		; -> b[2]
+	mov	a, e
+	adc	m		; E += b[2] + carry
+	mov	e, a
 
-	inx	h
-	mov	a, m
-	adc	e
-	mov	m, a		; result[2] += b[2] + carry
-
-	inx	h
-	mov	a, m
-	adc	d
-	mov	m, a		; result[3] += b[3] + carry
+	inx	h		; -> b[3]
+	mov	a, d
+	adc	m		; D += b[3] + carry
+	mov	d, a
 
 .Lm32_no_add:
 	; --- Shift multiplier (a) right by 1 ---
 	; Process MSB first so carry propagates downward.
-	lxi	h, 9
+	lxi	h, 5
 	dad	sp		; HL -> a[3]
 	mov	a, m
 	ora	a		; clear carry
@@ -245,7 +239,7 @@ __mul32:
 
 	; --- Shift multiplicand (b) left by 1 ---
 	; Process LSB first so carry propagates upward.
-	lxi	h, 10
+	lxi	h, 6
 	dad	sp		; HL -> b[0]
 	mov	a, m
 	add	a		; b[0] <<= 1
@@ -269,21 +263,7 @@ __mul32:
 	jmp	.Lm32_loop
 
 .Lm32_done:
-	; Load result into return registers BC:DE
-	lxi	h, 0
-	dad	sp
-	mov	c, m		; result[0] -> C  (byte 0, LSB)
-	inx	h
-	mov	b, m		; result[1] -> B  (byte 1)
-	inx	h
-	mov	e, m		; result[2] -> E  (byte 2)
-	inx	h
-	mov	d, m		; result[3] -> D  (byte 3, MSB)
-
-	; Deallocate 4 bytes of stack locals
-	pop	h
-	pop	h
-
+	; Result is already in BC:DE (return convention).
 	ret
 	.size	__mul32, .-__mul32
 
