@@ -157,9 +157,15 @@ __rotldi2:
 	mov	a, m
 	ral			; carry = MSB of work[7]
 
-	; Chain left shift from work[0] to work[7]
-	lxi	h, 0
-	dad	sp
+	; Navigate from work[7] to work[0] without clobbering carry
+	; (DAD SP would destroy carry — use 7×DCX instead)
+	dcx	h
+	dcx	h
+	dcx	h
+	dcx	h
+	dcx	h
+	dcx	h
+	dcx	h
 	mov	a, m
 	ral
 	mov	m, a
@@ -375,9 +381,15 @@ __rotrdi2:
 	mov	a, m		; work[0]
 	rar			; carry = LSB of work[0]
 
-	; Chain right shift from work[7] down to work[0]
-	lxi	h, 7
-	dad	sp
+	; Navigate from work[0] to work[7] without clobbering carry
+	; (DAD SP would destroy carry — use 7×INX instead)
+	inx	h
+	inx	h
+	inx	h
+	inx	h
+	inx	h
+	inx	h
+	inx	h
 	mov	a, m
 	rar
 	mov	m, a
