@@ -226,5 +226,20 @@
 - Sum verification: RECV=78, SUM=3081 = 78×79/2 — mathematically correct
 - ISR stack: 0xFB00-0xFC00 (256B), main stack: 0xFC00-0xFE00 (512B), markers: 0xFE00+
 
+## 2026-02-07 FIX Two off-by-one/two bugs in 64-bit division wrapper functions
+
+**What**: Fixed two stack offset bugs in `__udivdi3`, `__divdi3`, and `__moddi3` wrappers in `int_divdi3.S`. The core `__udivmoddi4` algorithm was correct; only the wrapper argument-passing was broken.
+
+**Where**: `sysroot/libi8085/builtins/int_divdi3.S` -- `__udivdi3` (line ~629), `__divdi3` (line ~966), `__moddi3` (line ~1214) for bug 1; `__divdi3` (line ~1022), `__moddi3` (line ~1271) for bug 2. Also updated `tooling/examples/div_torture/div_torture.c` to use volatile i64 inputs.
+
+**Why**: 64-bit division produced wrong results for values with non-zero MSB byte. Example: `0xFFFFFFFFFFFFFFFF / 2` returned `0x005571D09ADE4A18` instead of `0x7FFFFFFFFFFFFFFF`.
+
+**Technical notes**:
+- Bug 1 (off-by-one): Sliding-window push pattern `lxi h, 20; dad sp; mov d, m; dcx h; mov e, m; push d` reads bytes at SP+20 and SP+19, but the target pair bytes are at SP+20 and SP+21. Fixed by changing `lxi h, 20` to `lxi h, 21` in all b/a pair pushes across `__udivdi3`, `__divdi3`, `__moddi3` (24 instances). `__umoddi3` was NOT affected (uses offset 29, which is correct for its frame).
+- Bug 2 (off-by-two): In `__divdi3` and `__moddi3`, the sret pointer push used `lxi h, 22` but sret is at SP+20 after push psw(+2) + push b(+8) + push a(+8) = 18 bytes from original SP where sret was at SP+2. So 2+18=20, not 22.
+- Comprehensive test: 17 test cases covering unsigned div, signed div (positive/negative/both), unsigned mod, signed mod, edge cases (MAX/2, equal, 0/x, MAX/1, MIN/-1). All pass.
+- div_torture.c: i64 inputs changed to volatile (were non-volatile to work around the bug). Still guarded by `__OPTIMIZE__` at -O0 due to ROM overflow (2839 bytes over 48K limit).
+- Full benchmark suite: 56/56 HALTED, no regressions.
+
 ---
 *Last Updated: 2026-02-07*

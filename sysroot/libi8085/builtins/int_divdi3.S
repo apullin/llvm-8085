@@ -625,59 +625,61 @@ __udivdi3:
 	lxi	h, 0
 	push	h		; rem = NULL (+2)
 
-	; Push divisor (b) from [SP+12+2=14..19+2=21]
-	lxi	h, 20
+	; Push divisor (b) — high pair first, low pair last.
+	; After push NULL (+2): b at [SP+14..21], b[7] at SP+21, b[6] at SP+20.
+	; Each push shifts by +2, but the target pair also moves +2,
+	; so the high byte of each pair stays at SP+21.
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; b[7]
 	dcx	h
 	mov	e, m		; b[6]
 	push	d		; b[6..7]
-	lxi	h, 20		; b[5] at 17+2+2=21... recalculate
-	; Original: b at [SP+12..19]. After push NULL (+2) and push d (+2) = +4
-	; b[4..5] at SP+16+4=20
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; b[5]
 	dcx	h
 	mov	e, m		; b[4]
-	push	d
-	lxi	h, 20		; b[2..3] at SP+14+6=20
+	push	d		; b[4..5]
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; b[3]
 	dcx	h
 	mov	e, m		; b[2]
-	push	d
-	lxi	h, 20		; b[0..1] at SP+12+8=20
+	push	d		; b[2..3]
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; b[1]
 	dcx	h
 	mov	e, m		; b[0]
-	push	d		; total pushed: 10 bytes
+	push	d		; b[0..1] — total pushed: 10 bytes
 
-	; Push dividend (a) from [SP+4+10=14..11+10=21]
-	lxi	h, 20
+	; Push dividend (a) — same sliding-window pattern.
+	; After 10 bytes pushed: a at [SP+14..21], a[7] at SP+21.
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; a[7]
 	dcx	h
 	mov	e, m		; a[6]
-	push	d
-	lxi	h, 20
+	push	d		; a[6..7]
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; a[5]
 	dcx	h
 	mov	e, m		; a[4]
-	push	d
-	lxi	h, 20
+	push	d		; a[4..5]
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; a[3]
 	dcx	h
 	mov	e, m		; a[2]
-	push	d
-	lxi	h, 20
+	push	d		; a[2..3]
+	lxi	h, 21
 	dad	sp
 	mov	d, m		; a[1]
 	dcx	h
 	mov	e, m		; a[0]
-	push	d		; total pushed: 18 bytes
+	push	d		; a[0..1] — total pushed: 18 bytes
 
 	; Push sret pointer from [SP+2+18=20..3+18=21]
 	lxi	h, 20
@@ -962,67 +964,69 @@ __divdi3:
 	; (sret, |a|, |b| on the caller's stack, which we modified in-place).
 	; But we need to negate the result after, so we can't tail-call.
 
-	; Push b (8 bytes) from [SP+14..21]
-	lxi	h, 20
+	; Push b (8 bytes) — sliding window, high byte at SP+21
+	; After push psw (+2): b at [SP+14..21], b[7] at SP+21.
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; b[6..7]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; b[4..5]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; b[2..3]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; b[0..1]
 
-	; Push a (8 bytes) from [SP+6+8=14..13+8=21]
-	lxi	h, 20
+	; Push a (8 bytes) — same sliding window
+	; After 8 bytes for b: a at [SP+14..21], a[7] at SP+21.
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; a[6..7]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; a[4..5]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; a[2..3]
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d		; a[0..1]
 
-	; Push sret pointer from [SP+4+18=22..5+18=23]
-	lxi	h, 22
+	; Push sret pointer from [SP+2+18=20..SP+3+18=21]
+	lxi	h, 20
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
 	push	d		; sret
 
-	; Total pushed: 18 bytes
+	; Total pushed: 20 bytes (push psw + 8 b + 8 a + 2 sret)
 	call	__udivdi3
 
 	; Clean up 18 bytes
@@ -1210,60 +1214,61 @@ __moddi3:
 	mov	m, a
 
 .Lmoddi3_b_pos:
-	; Push b
-	lxi	h, 20
+	; Push b — sliding window, high byte at SP+21
+	; After push psw (+2): b at [SP+14..21], b[7] at SP+21.
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d
-	lxi	h, 20
-	dad	sp
-	mov	d, m
-	dcx	h
-	mov	e, m
-	push	d
-
-	; Push a
-	lxi	h, 20
-	dad	sp
-	mov	d, m
-	dcx	h
-	mov	e, m
-	push	d
-	lxi	h, 20
-	dad	sp
-	mov	d, m
-	dcx	h
-	mov	e, m
-	push	d
-	lxi	h, 20
-	dad	sp
-	mov	d, m
-	dcx	h
-	mov	e, m
-	push	d
-	lxi	h, 20
+	lxi	h, 21
 	dad	sp
 	mov	d, m
 	dcx	h
 	mov	e, m
 	push	d
 
-	; Push sret
-	lxi	h, 22
+	; Push a — same sliding window
+	lxi	h, 21
+	dad	sp
+	mov	d, m
+	dcx	h
+	mov	e, m
+	push	d
+	lxi	h, 21
+	dad	sp
+	mov	d, m
+	dcx	h
+	mov	e, m
+	push	d
+	lxi	h, 21
+	dad	sp
+	mov	d, m
+	dcx	h
+	mov	e, m
+	push	d
+	lxi	h, 21
+	dad	sp
+	mov	d, m
+	dcx	h
+	mov	e, m
+	push	d
+
+	; Push sret pointer from [SP+2+18=20..SP+3+18=21]
+	lxi	h, 20
 	dad	sp
 	mov	e, m
 	inx	h
