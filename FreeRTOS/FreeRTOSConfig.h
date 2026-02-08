@@ -22,10 +22,11 @@
 #define configTICK_TYPE_WIDTH_IN_BITS           TICK_TYPE_WIDTH_16_BITS
 #define configIDLE_SHOULD_YIELD                 1
 
-/* Memory - static allocation only (no heap) */
+/* Memory allocation */
 #define configSUPPORT_STATIC_ALLOCATION         1
-#define configSUPPORT_DYNAMIC_ALLOCATION        0
-#define configTOTAL_HEAP_SIZE                   0
+#define configSUPPORT_DYNAMIC_ALLOCATION        1
+#define configTOTAL_HEAP_SIZE                   4096
+#define configAPPLICATION_ALLOCATED_HEAP        0
 
 /* Features */
 #define configUSE_MUTEXES                       1
@@ -51,7 +52,7 @@
 /* Optional functions */
 #define INCLUDE_vTaskPrioritySet                0
 #define INCLUDE_uxTaskPriorityGet               0
-#define INCLUDE_vTaskDelete                     0
+#define INCLUDE_vTaskDelete                     1
 #define INCLUDE_vTaskSuspend                    0
 #define INCLUDE_vTaskDelayUntil                 0
 #define INCLUDE_vTaskDelay                      1

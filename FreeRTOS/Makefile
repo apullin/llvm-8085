@@ -39,6 +39,10 @@ KERNEL_SRC := \
     $(ROOT)/FreeRTOS-Kernel/list.c \
     $(ROOT)/FreeRTOS-Kernel/queue.c
 
+# Heap allocator (heap_4 = coalescing malloc/free)
+HEAP_SRC := \
+    $(ROOT)/FreeRTOS-Kernel/portable/MemMang/heap_4.c
+
 # Port sources
 PORT_SRC := \
     $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/port.c
@@ -58,12 +62,13 @@ DEMO_BASIC_LIST := $(BUILDDIR)/freertos_basic.list
 
 # Object files
 KERNEL_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(KERNEL_SRC))
+HEAP_OBJS       := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/MemMang/%.c,$(BUILDDIR)/heap/%.o,$(HEAP_SRC))
 PORT_C_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.c,$(BUILDDIR)/port/%.o,$(PORT_SRC))
 PORT_ASM_OBJS   := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.S,$(BUILDDIR)/port/%.o,$(PORT_ASM))
 STARTUP_OBJS    := $(patsubst %.S,$(BUILDDIR)/%.o,$(STARTUP_SRC))
 DEMO_BASIC_OBJ  := $(BUILDDIR)/demo_basic.o
 
-ALL_BASIC_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_BASIC_OBJ)
+ALL_BASIC_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_BASIC_OBJ)
 
 # ---- Queue demo ----
 DEMO_QUEUE_ELF  := $(BUILDDIR)/freertos_queue.elf
@@ -72,13 +77,24 @@ DEMO_QUEUE_MAP  := $(BUILDDIR)/freertos_queue.map
 DEMO_QUEUE_LIST := $(BUILDDIR)/freertos_queue.list
 DEMO_QUEUE_OBJ  := $(BUILDDIR)/demo_queue.o
 
-ALL_QUEUE_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_QUEUE_OBJ)
+ALL_QUEUE_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_QUEUE_OBJ)
 
-.PHONY: all clean run run-queue queue
+# ---- Heap demo (dynamic allocation with heap_4) ----
+DEMO_HEAP_ELF  := $(BUILDDIR)/freertos_heap.elf
+DEMO_HEAP_BIN  := $(BUILDDIR)/freertos_heap.bin
+DEMO_HEAP_MAP  := $(BUILDDIR)/freertos_heap.map
+DEMO_HEAP_LIST := $(BUILDDIR)/freertos_heap.list
+DEMO_HEAP_OBJ  := $(BUILDDIR)/demo_heap.o
+
+ALL_HEAP_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_HEAP_OBJ)
+
+.PHONY: all clean run run-queue run-heap queue heap
 
 all: $(DEMO_BASIC_BIN) $(DEMO_BASIC_LIST)
 
 queue: $(DEMO_QUEUE_BIN) $(DEMO_QUEUE_LIST)
+
+heap: $(DEMO_HEAP_BIN) $(DEMO_HEAP_LIST)
 
 # Binary extraction
 $(BUILDDIR)/%.bin: $(BUILDDIR)/%.elf
@@ -93,11 +109,12 @@ $(DEMO_BASIC_ELF): $(ALL_BASIC_OBJS) linker.ld
 	    $(ALL_BASIC_OBJS) $(LIBGCC) $(LIBC) $(LIBGCC) \
 	    -o $@
 
-# Compile FreeRTOS kernel C sources
-# Previously forced -O0 due to a codegen bug where Machine Copy Propagation
-# incorrectly removed COPY $hl,$bc when pseudo instructions declared Defs=[HL].
-# Fixed by removing HL from Defs of STORE/LOAD pseudos (they conditionally
-# preserve HL via PUSH/POP during expansion).
+# Compile heap allocator
+$(BUILDDIR)/heap/%.o: $(ROOT)/FreeRTOS-Kernel/portable/MemMang/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile FreeRTOS kernel C sources (tasks.c, list.c, queue.c)
 $(BUILDDIR)/kernel/%.o: $(ROOT)/FreeRTOS-Kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -140,6 +157,12 @@ run: $(DEMO_BASIC_BIN)
 	    -d 0xFE00:8 \
 	    $(DEMO_BASIC_BIN)
 
+# Link heap demo
+$(DEMO_HEAP_ELF): $(ALL_HEAP_OBJS) linker.ld
+	$(LD) $(LDFLAGS) -Map $(DEMO_HEAP_MAP) \
+	    $(ALL_HEAP_OBJS) $(LIBGCC) $(LIBC) $(LIBGCC) \
+	    -o $@
+
 # Run queue demo
 run-queue: $(DEMO_QUEUE_BIN)
 	$(TRACE) \
@@ -147,3 +170,11 @@ run-queue: $(DEMO_QUEUE_BIN)
 	    -n 500000 -S \
 	    -d 0xFE00:8 \
 	    $(DEMO_QUEUE_BIN)
+
+# Run heap demo (more steps needed for alloc/free cycles)
+run-heap: $(DEMO_HEAP_BIN)
+	$(TRACE) \
+	    --timer=65:30720 \
+	    -n 2000000 -S \
+	    -d 0xFE00:16 \
+	    $(DEMO_HEAP_BIN)

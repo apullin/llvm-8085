@@ -241,5 +241,50 @@
 - div_torture.c: i64 inputs changed to volatile (were non-volatile to work around the bug). Still guarded by `__OPTIMIZE__` at -O0 due to ROM overflow (2839 bytes over 48K limit).
 - Full benchmark suite: 56/56 HALTED, no regressions.
 
+## 2026-02-07 DONE LOAD/STORE 32-bit coalescing and cross-operation register forwarding
+
+**What**: Implemented two backend optimizations in I8085ExpandPseudoInsts32.cpp: (1) batch-into-B/C/D/E coalescing for 5 LOAD/STORE 32-bit pseudo expansions, and (2) cross-operation register forwarding that skips unnecessary scratch store+load round-trips between consecutive batch-mode 32-bit operations.
+
+**Where**: `llvm-project/llvm/lib/Target/I8085/I8085ExpandPseudoInsts32.cpp` — 326 insertions, 41 deletions. Submodule commit `e1711ca994bd`.
+
+**Why**: The 8085 has no indexed addressing, so every 32-bit stack access costs 4 × (LXI+DAD+MOV) = 20 bytes. Coalescing reduces this to 2 × (LXI+DAD) + 6 × INX = 12 bytes by batch-loading into B/C/D/E when they're dead after the instruction.
+
+**Technical notes**:
+- Workstream 1 (coalescing): Applied to LOAD_32_WITH_ADDR, LOAD_32_OFFSET_WITH_SP, STORE_32_AT_OFFSET_WITH_SP, STORE_32 (non-HL), LOAD_32_WITH_IMM_ADDR. Uses `computeRegisterLiveness` with 20-insn lookahead to check B/C/D/E dead.
+- Workstream 2 (forwarding): `tryForwardBCDE()` peeks at the next GR32 pseudo. If it's a binOperation (XOR_32/OR_32/AND_32) consuming the same register, skips Phase 3 store in producer and Phase 1 load in consumer. `BCDEForwarded` DenseMap tracks state across expansion loop restarts.
+- O2 code size gains: fp_bench -19.1% (17885->14463), arith64 -20.1% (14871->11883), div_torture -16.4% (23281->19471), bitops -14.8% (15205->12960), float_torture -12.1% (10890->9575), bubble_sort -7.1% (675->627), fib -4.7% (277->264), crc32 -2.0% (656->643). O0 gains even larger (arith64 -27%, fp_bench -22%).
+- Forwarding provides small additional gain (~0.2% on arith64) beyond coalescing.
+- All 56 benchmarks (O0/O1/O2/Os) HALTED. All 15 benchmarks at -Oz HALTED. FreeRTOS demos verified at -O0, -O1, -O2, -Oz.
+
+## 2026-02-07 DONE FreeRTOS heap_4 dynamic allocation demo
+
+**What**: Implemented and verified a FreeRTOS heap_4 demo that exercises pvPortMalloc/vPortFree with block coalescing, dynamic task creation/deletion, and dynamic queue creation/deletion.
+
+**Where**: `FreeRTOS/demo_heap.c` (new), `FreeRTOS/Makefile` (heap targets + -O1 workaround), `FreeRTOS/FreeRTOSConfig.h` (enabled dynamic allocation)
+
+**Why**: Stress-test the backend with a real-world dynamic memory allocator. heap_4 exercises pointer arithmetic, linked-list manipulation, and block coalescing — all patterns that push the i8085 codegen hard.
+
+**Technical notes**:
+- 4 test patterns: simple alloc/free (32B), coalescing (3×64B free → 180B realloc), dynamic queue create/send/receive/delete, dynamic task create + self-delete via vTaskDelete.
+- configTOTAL_HEAP_SIZE=4096, all markers stable after 37+ rounds (ALLOCS=FREES=185, FREE_HEAP=3784).
+- Found two new -O2/-Oz codegen bugs: (1) tasks.c scheduler startup fails when configSUPPORT_DYNAMIC_ALLOCATION=1 (additional code paths trigger miscompilation in prvCreateIdleTasks), (2) heap_4.c pvPortMalloc(64) returns NULL while pvPortMalloc(32) works (block-finding logic miscompiles).
+- Workaround: tasks.c and heap_4.c compiled at -O1 (max safe level), everything else at -Oz.
+- Works at -O0 and -O1 across the board. All three FreeRTOS demos (basic, queue, heap) verified working.
+
+## 2026-02-07 FIX LOAD_16_WITH_ADDR false Defs=[A] causing MCP miscompilation at -O2/-Oz
+
+**What**: Removed incorrect `Defs=[A]` from `LOAD_16_WITH_ADDR` pseudo instruction. This false def caused Machine Copy Propagation (MCP) to incorrectly remove `$a = COPY $b` as dead, breaking tasks.c at -O2+ (scheduler startup failed when `configSUPPORT_DYNAMIC_ALLOCATION=1`).
+
+**Where**: `llvm-project/llvm/lib/Target/I8085/I8085InstrInfo.td` (LOAD_16_WITH_ADDR definition), `FreeRTOS/Makefile` (removed -O1 workarounds for tasks.c and heap_4.c)
+
+**Why**: `LOAD_16_WITH_ADDR` only clobbers A when dest=HL (uses `MOV A,M` + `MOV L,A`). When dest=BC/DE, expansion uses `MOV_FROM_M` or `LOAD_8_WITH_ADDR` which do NOT touch A. The `shouldPreservePSW` mechanism in `I8085ExpandPseudoInsts.cpp` already handles saving/restoring PSW when dest=HL and A is live. Declaring `Defs=[A]` globally made MCP think every LOAD_16_WITH_ADDR redefines A, so it deleted preceding `$a = COPY` instructions as dead.
+
+**Technical notes**:
+- Found via `opt-bisect-limit` binary search: pass 3659 = "Machine Copy Propagation Pass on function (xTaskCreateStatic)" was the culprit.
+- MIR showed: `$de = LOAD_16_WITH_ADDR %stack.2, implicit-def $a` / `$a = COPY killed $b` / `$bc = LOAD_16_WITH_ADDR %stack.3, implicit-def $a` / `JMP_8_IF killed $a`. MCP removed the COPY because it saw $a redefined by the second LOAD_16_WITH_ADDR.
+- Same bug class as the earlier `Defs=[HL]` fix on STORE/LOAD pseudos.
+- heap_4.c at -O2 was NOT actually broken (tested fine with current compiler). The -O1 workaround there was unnecessary.
+- Verification: all 14 benchmarks x 5 opt levels (O0/O1/O2/Os/Oz) = 70/70 HALTED. All 3 FreeRTOS demos pass at -Oz with no workarounds. libgcc rebuilt with fixed compiler.
+
 ---
 *Last Updated: 2026-02-07*
