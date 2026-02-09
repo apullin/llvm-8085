@@ -43,6 +43,10 @@ KERNEL_SRC := \
 HEAP_SRC := \
     $(ROOT)/FreeRTOS-Kernel/portable/MemMang/heap_4.c
 
+# Event groups
+EVENT_SRC := \
+    $(ROOT)/FreeRTOS-Kernel/event_groups.c
+
 # Port sources
 PORT_SRC := \
     $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/port.c
@@ -63,6 +67,7 @@ DEMO_BASIC_LIST := $(BUILDDIR)/freertos_basic.list
 # Object files
 KERNEL_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(KERNEL_SRC))
 HEAP_OBJS       := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/MemMang/%.c,$(BUILDDIR)/heap/%.o,$(HEAP_SRC))
+EVENT_OBJS      := $(patsubst $(ROOT)/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(EVENT_SRC))
 PORT_C_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.c,$(BUILDDIR)/port/%.o,$(PORT_SRC))
 PORT_ASM_OBJS   := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.S,$(BUILDDIR)/port/%.o,$(PORT_ASM))
 STARTUP_OBJS    := $(patsubst %.S,$(BUILDDIR)/%.o,$(STARTUP_SRC))
@@ -88,13 +93,35 @@ DEMO_HEAP_OBJ  := $(BUILDDIR)/demo_heap.o
 
 ALL_HEAP_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_HEAP_OBJ)
 
-.PHONY: all clean run run-queue run-heap queue heap
+# ---- Event group demo ----
+DEMO_EVENTGROUP_ELF  := $(BUILDDIR)/freertos_eventgroup.elf
+DEMO_EVENTGROUP_BIN  := $(BUILDDIR)/freertos_eventgroup.bin
+DEMO_EVENTGROUP_MAP  := $(BUILDDIR)/freertos_eventgroup.map
+DEMO_EVENTGROUP_LIST := $(BUILDDIR)/freertos_eventgroup.list
+DEMO_EVENTGROUP_OBJ  := $(BUILDDIR)/demo_eventgroup.o
+
+ALL_EVENTGROUP_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(EVENT_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_EVENTGROUP_OBJ)
+
+# ---- Mutex demo ----
+DEMO_MUTEX_ELF  := $(BUILDDIR)/freertos_mutex.elf
+DEMO_MUTEX_BIN  := $(BUILDDIR)/freertos_mutex.bin
+DEMO_MUTEX_MAP  := $(BUILDDIR)/freertos_mutex.map
+DEMO_MUTEX_LIST := $(BUILDDIR)/freertos_mutex.list
+DEMO_MUTEX_OBJ  := $(BUILDDIR)/demo_mutex.o
+
+ALL_MUTEX_OBJS  := $(STARTUP_OBJS) $(KERNEL_OBJS) $(HEAP_OBJS) $(EVENT_OBJS) $(PORT_C_OBJS) $(PORT_ASM_OBJS) $(DEMO_MUTEX_OBJ)
+
+.PHONY: all clean run run-queue run-heap run-eventgroup run-mutex queue heap eventgroup mutex
 
 all: $(DEMO_BASIC_BIN) $(DEMO_BASIC_LIST)
 
 queue: $(DEMO_QUEUE_BIN) $(DEMO_QUEUE_LIST)
 
 heap: $(DEMO_HEAP_BIN) $(DEMO_HEAP_LIST)
+
+eventgroup: $(DEMO_EVENTGROUP_BIN) $(DEMO_EVENTGROUP_LIST)
+
+mutex: $(DEMO_MUTEX_BIN) $(DEMO_MUTEX_LIST)
 
 # Binary extraction
 $(BUILDDIR)/%.bin: $(BUILDDIR)/%.elf
@@ -178,3 +205,21 @@ run-heap: $(DEMO_HEAP_BIN)
 	    -n 2000000 -S \
 	    -d 0xFE00:16 \
 	    $(DEMO_HEAP_BIN)
+
+# Link event group demo
+$(DEMO_EVENTGROUP_ELF): $(ALL_EVENTGROUP_OBJS) linker.ld
+	$(LD) $(LDFLAGS) -Map $(DEMO_EVENTGROUP_MAP) \
+	    $(ALL_EVENTGROUP_OBJS) $(LIBGCC) $(LIBC) $(LIBGCC) -o $@
+
+# Link mutex demo
+$(DEMO_MUTEX_ELF): $(ALL_MUTEX_OBJS) linker.ld
+	$(LD) $(LDFLAGS) -Map $(DEMO_MUTEX_MAP) \
+	    $(ALL_MUTEX_OBJS) $(LIBGCC) $(LIBC) $(LIBGCC) -o $@
+
+# Run event group demo
+run-eventgroup: $(DEMO_EVENTGROUP_BIN)
+	$(TRACE) --timer=65:30720 -n 2000000 -S -d 0xFE00:8 $(DEMO_EVENTGROUP_BIN)
+
+# Run mutex demo
+run-mutex: $(DEMO_MUTEX_BIN)
+	$(TRACE) --timer=65:30720 -n 2000000 -S -d 0xFE00:10 $(DEMO_MUTEX_BIN)
