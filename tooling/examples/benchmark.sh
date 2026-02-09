@@ -96,6 +96,9 @@ MAX_STEPS[fp_bench]="5000000"
 DUMP_RANGE[arith64_torture]="0x0200:4"
 MAX_STEPS[arith64_torture]="50000000"
 
+DUMP_RANGE[coremark]="0x0200:4"
+MAX_STEPS[coremark]="100000000"
+
 # Linker scripts
 LINKER_SCRIPT[fib]="${LINKER_DEFAULT}"
 LINKER_SCRIPT[q7_8_matmul]="${LINKER_INPUT}"
@@ -112,6 +115,7 @@ LINKER_SCRIPT[string_torture]="${LINKER_INPUT}"
 LINKER_SCRIPT[float_torture]="${LINKER_DEFAULT}"
 LINKER_SCRIPT[fp_bench]="${LINKER_DEFAULT}"
 LINKER_SCRIPT[arith64_torture]="${LINKER_LARGE}"
+LINKER_SCRIPT[coremark]="${LINKER_LARGE}"
 
 # Expected output files
 EXPECTED_FILE[fib]="$ROOT/tooling/examples/fib/expected.hex"
@@ -129,6 +133,7 @@ EXPECTED_FILE[string_torture]=""
 EXPECTED_FILE[float_torture]=""
 EXPECTED_FILE[fp_bench]=""
 EXPECTED_FILE[arith64_torture]=""
+EXPECTED_FILE[coremark]=""
 
 # Output format
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-table}"  # table or csv

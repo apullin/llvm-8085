@@ -286,5 +286,45 @@
 - heap_4.c at -O2 was NOT actually broken (tested fine with current compiler). The -O1 workaround there was unnecessary.
 - Verification: all 14 benchmarks x 5 opt levels (O0/O1/O2/Os/Oz) = 70/70 HALTED. All 3 FreeRTOS demos pass at -Oz with no workarounds. libgcc rebuilt with fixed compiler.
 
+## 2026-02-08 DONE LLDB debugging support — GDB stub + ABI plugin + DWARF
+
+**What**: Implemented full LLDB debugging infrastructure for i8085: (1) GDB Remote Serial Protocol server in i8085-trace simulator, (2) LLDB ABI plugin in llvm-project, (3) verified DWARF debug info already works. All 5 end-to-end tests pass.
+
+**Where**:
+- `i8085-trace/src/gdb_stub.cpp` (~700 lines, NEW) — GDB RSP server
+- `i8085-trace/include/gdb_stub.hpp` (NEW) — header
+- `i8085-trace/src/main.cpp` — added `--gdb=PORT` flag
+- `i8085-trace/CMakeLists.txt` — added gdb_stub.cpp
+- `llvm-project/lldb/source/Plugins/ABI/I8085/` (3 new files) — ABI plugin
+- `llvm-project/lldb/source/Plugins/ABI/CMakeLists.txt` — added I8085
+
+**Why**: Needed real debugging infrastructure (breakpoints, single-step, register/memory inspection) to investigate complex runtime issues like the CoreMark bottleneck. Modeled on existing tms9900-trace GDB stub.
+
+**Technical notes**:
+- GDB stub serves target XML with 15 registers (B/C/D/E/H/L/M/A/SP/FLAGS/PSW/PC/BC/DE/HL) in DWARF order
+- Register serialization: 42 hex chars total (8×2 for 8-bit regs + 5×4 for 16-bit LE regs)
+- Protocol: full RSP with ACK, supports ?, g/G, p/P, m/M, s, c, Z0/z0, qSupported, qXfer:features:read, thread info, kill/detach
+- Continue loop: fires periodic timers, checks breakpoints after each step, polls for Ctrl-C every 1024 steps
+- ABI plugin: `ABISysV_i8085` (RegInfoBasedABI), CFA=SP+2, PC at [CFA-2], all registers volatile
+- DWARF already works — .debug_info/.debug_line/.debug_frame sections present with `-g`
+- LLDB built at `llvm-project/build-clang-8085/bin/lldb` with `LLVM_ENABLE_PROJECTS="clang;lld;lldb"`
+- Usage: `i8085-trace --gdb=1234 program.bin` then `lldb -o "target create program.elf" -o "gdb-remote localhost:1234"`
+- Symbol-level debugging works: `breakpoint set -n main`, backtrace shows symbol names, register display shows symbol annotations
+
+## 2026-02-08 FIX HL-clobber bug: live HL destroyed by GR32 pseudo expansions
+
+**What**: Fixed a critical codegen bug where GR32 pseudo instruction expansions (LOAD_32_WITH_ADDR, STORE_32, etc.) clobber HL via implicit-def, destroying live values the register allocator placed in HL. Manifested as CoreMark infinite loop at -O1+ and incorrect 32-bit unsigned comparisons.
+
+**Where**: `I8085ExpandPseudoInsts32.cpp` (expandMI restructured, HLSaveBias added to all SP-relative offsets), `I8085InstrInfo32.td` (removed Defs=[A] from LOAD_32 pseudos)
+
+**Why**: The register allocator assigns HL to hold a live value (e.g., OR mask `2` for `r |= 2`). When a GR32 pseudo with `implicit-def $hl` (NOT dead) appears between the HL assignment and its use, the expansion overwrites HL. The allocator doesn't spill because it believes the pseudo's HL output IS the needed value.
+
+**Technical notes**:
+- Found via `opt-bisect-limit` binary search: pass 225 (InstCombine) transforms `icmp sle %x, 1` → `icmp ult %x, 2`, exposing the bug (signed comparisons used different codegen that avoided the HL conflict)
+- Fix: detect `implicit-def $hl` NOT dead on non-branch pseudos, wrap expansion in PUSH H / POP H, add HLSaveBias (+2) to all SP-relative offsets
+- Also removed Defs=[A] from LOAD_32 pseudos (batch path doesn't touch A; fallback path now preserves A with PUSH PSW)
+- Also eliminated DiffMBB indirection in JMP_32_IF_NOT_EQUAL, using direct jumps with explicit JNZ+JMP in every comparison block (fixes analyzeBranch)
+- All 15 benchmarks pass at O0/O1/O2/Os (60/60 HALTED), submodule commit d3493829
+
 ---
-*Last Updated: 2026-02-07*
+*Last Updated: 2026-02-08*
