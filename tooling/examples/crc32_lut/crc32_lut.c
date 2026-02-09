@@ -72,7 +72,7 @@ static const uint32_t crc32_table[256] = {
     0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
 };
 
-static uint32_t crc32_lut(const uint8_t *data, uint16_t len) {
+static uint32_t crc32_lut(volatile const uint8_t *data, uint16_t len) {
     uint32_t crc = 0xFFFFFFFF;
     while (len--) {
         uint8_t index = (uint8_t)(crc ^ *data++);
@@ -81,13 +81,14 @@ static uint32_t crc32_lut(const uint8_t *data, uint16_t len) {
     return crc ^ 0xFFFFFFFF;
 }
 
-/* Test data: "123456789" - standard CRC test vector */
-static const uint8_t test_data[] = {
+/* Test data: "123456789" - standard CRC test vector
+ * volatile to prevent the compiler from evaluating CRC at compile time. */
+volatile const uint8_t test_data[] = {
     '1', '2', '3', '4', '5', '6', '7', '8', '9'
 };
 
 /* Additional test: 16 bytes of binary data */
-static const uint8_t test_data2[] = {
+volatile const uint8_t test_data2[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
 };
