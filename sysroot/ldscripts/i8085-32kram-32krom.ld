@@ -23,6 +23,23 @@ SECTIONS
     *(.rodata .rodata.*)
   } > ROM
 
+  /* C++ global constructors/destructors */
+  .init_array : {
+    . = ALIGN(2);
+    PROVIDE_HIDDEN(__init_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+    KEEP(*(.init_array .ctors))
+    PROVIDE_HIDDEN(__init_array_end = .);
+  } > ROM
+
+  .fini_array : {
+    . = ALIGN(2);
+    PROVIDE_HIDDEN(__fini_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+    KEEP(*(.fini_array .dtors))
+    PROVIDE_HIDDEN(__fini_array_end = .);
+  } > ROM
+
   . = ALIGN(2);
   _etext = .;
 
@@ -55,3 +72,7 @@ PROVIDE(_bss_size = _ebss - _sbss);
 
 PROVIDE(_estack = ORIGIN(RAM) + LENGTH(RAM));
 PROVIDE(_stack = _estack);
+
+/* Heap for picolibc malloc — between BSS end and stack */
+PROVIDE(__heap_start = _end);
+PROVIDE(__heap_end = _stack - 0x0200);

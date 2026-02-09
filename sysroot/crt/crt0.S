@@ -81,6 +81,33 @@ bss_loop:
   JNZ bss_loop
 
 bss_done:
+  // Call global constructors (.init_array) — needed for C++
+  LXI H, __init_array_start
+  LXI D, __init_array_end
+
+init_loop:
+  MOV A, H
+  CMP D
+  JNZ init_call
+  MOV A, L
+  CMP E
+  JZ init_done
+
+init_call:
+  MOV C, M      // low byte of function pointer
+  INX H
+  MOV B, M      // high byte
+  INX H
+  PUSH H        // save iterator
+  PUSH D        // save end pointer
+  MOV H, B
+  MOV L, C      // HL = function pointer
+  CALL __call_hl
+  POP D         // restore end pointer
+  POP H         // restore iterator
+  JMP init_loop
+
+init_done:
   CALL main
 
 halt_loop:
@@ -88,10 +115,25 @@ halt_loop:
   JMP halt_loop
 
   .text
+  // Indirect call trampoline: CALL __call_hl jumps to address in HL.
+  // The CALL pushes the return address, then PCHL jumps to the function.
+  // When the function RETurns, it returns to after the CALL.
+  .globl __call_hl
+__call_hl:
+  PCHL
+
   .globl default_isr
 default_isr:
   HLT
   JMP default_isr
+
+  // _exit stub: halt the CPU
+  .globl _exit
+  .globl _Exit
+_exit:
+_Exit:
+  HLT
+  JMP _exit
 
   .weak isr_rst1
   .weak isr_rst2

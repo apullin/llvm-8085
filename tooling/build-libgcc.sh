@@ -145,7 +145,7 @@ fi
 # integer division, 64-bit shifts, and 64-bit add/sub.
 # Assembly avoids bootstrapping issues and gives much better performance
 # than the C versions compiled through the i8085 backend.
-for helper in memops int_mul int_div int_shift int_shift64 int_arith64 int_divdi3 ctzsi2 ctzdi2 clzdi2 popcountsi2 int_rotate int_rotate64 int_fshl stringops softfp; do
+for helper in memops int_mul int_div int_shift int_shift64 int_arith64 int_divdi3 ctzsi2 ctzdi2 clzdi2 popcountsi2 int_rotate int_rotate64 int_fshl stringops softfp malloc; do
   src="${LIBI8085_BUILTINS_DIR}/${helper}.S"
   if [[ ! -f "${src}" ]]; then
     echo "missing source: ${src}" >&2
