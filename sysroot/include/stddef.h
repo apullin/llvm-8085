@@ -7,7 +7,12 @@ extern "C" {
 
 typedef __SIZE_TYPE__ size_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
+#ifndef __cplusplus
 typedef __WCHAR_TYPE__ wchar_t;
+#endif
+typedef __WINT_TYPE__ wint_t;
+
+typedef long max_align_t;
 
 #ifndef NULL
 #ifdef __cplusplus

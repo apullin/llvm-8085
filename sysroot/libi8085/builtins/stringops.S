@@ -110,3 +110,62 @@ strcmp:
 	lxi	b, 0
 	ret
 	.size	strcmp, .-strcmp
+
+; ============================================================
+; void *memchr(const void *src, int c, size_t length)
+;   [SP+2] = src (pointer, 16-bit)
+;   [SP+4] = c   (int, 16-bit, only low byte used)
+;   [SP+6] = length (size_t, 16-bit)
+;   Returns pointer in BC (NULL=0 if not found)
+; ============================================================
+	.globl	memchr
+	.type	memchr,@function
+memchr:
+	; Load length into DE
+	lxi	h, 6
+	dad	sp
+	mov	e, m		; length low
+	inx	h
+	mov	d, m		; length high
+
+	; Load c (low byte only) into B
+	lxi	h, 4
+	dad	sp
+	mov	b, m		; B = (uint8_t)c
+
+	; Load src into HL
+	lxi	h, 2
+	dad	sp
+	mov	a, m		; src low
+	inx	h
+	mov	h, m		; src high
+	mov	l, a		; HL = src
+
+	; HL = src, B = c, DE = length
+.Lmemchr_loop:
+	; Check if length == 0
+	mov	a, d
+	ora	e
+	jz	.Lmemchr_notfound
+
+	; Compare *src with c
+	mov	a, m		; A = *src
+	cmp	b		; compare with c
+	jz	.Lmemchr_found
+
+	; Advance pointer, decrement length
+	inx	h		; src++
+	dcx	d		; length--
+	jmp	.Lmemchr_loop
+
+.Lmemchr_found:
+	; Return HL in BC
+	mov	b, h
+	mov	c, l
+	ret
+
+.Lmemchr_notfound:
+	; Return NULL (0) in BC
+	lxi	b, 0
+	ret
+	.size	memchr, .-memchr
