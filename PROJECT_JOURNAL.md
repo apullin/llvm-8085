@@ -356,5 +356,42 @@
 - Lesson: when pseudo expansion has multiple PUSH/POP pairs with different pop orders in different code paths, each path needs its own push order to maintain LIFO correctness.
 - Verification: sort5 branchless test correct at O0/O1/O2/Os/Oz. stl_test2 33/33 bytes at all opt levels. 60/60 benchmarks HALTED.
 
+## 2026-02-09 DONE Compiler stress testing — Csmith, LZ77, picolibc
+
+**What**: Ran 3 parallel stress test campaigns: (1) Csmith-style random program differential testing (500 programs, O0 vs O1/O2/Os/Oz), (2) LZ77 compression/decompression (pointer arithmetic, hash tables, sliding window), (3) picolibc sprintf/libc function testing (va_args, string ops, integer formatting).
+
+**Where**: Test infrastructure at `/tmp/gen_random_test.py`, `/tmp/difftest.sh`, `/tmp/sprintf_test.c`, `/tmp/minilzo_test.c`, `/tmp/lz_stress2.c`. Full report: `/tmp/stress_test_bugs.md`.
+
+**Why**: After STL bring-up exposed several backend bugs, wanted broad coverage to find more latent codegen issues before they bite real users.
+
+**Technical notes**:
+- **Csmith**: 500 UB-safe comparisons, 0 real miscompiles. 6 false positives were signed overflow UB (`int` is 16-bit). Confirmed with `-fwrapv`.
+- **LZ77**: Found NEW O1 bug — `switch i32` phi initialization clobbers HL holding loop index phi. While loops with 3+ exit paths at -O1 generate broken code (loop never executes). Minimal repro: `/tmp/switch_loop_extern.c`. opt-bisect-limit=0 still fails → backend codegen, not optimizer.
+- **picolibc**: Custom my_snprintf 37/37 pass at all opt levels. Core string/memory functions 32/32 pass (hand-written ASM in libgcc.a). Found 3 bugs in pre-compiled libc.a: strncpy infinite loop, strtol/atoi wrong results, strrchr infinite loop. All 3 are in picolibc's compiled C objects — likely same backend codegen bugs from pre-fix compiler. Recompiling libc.a with current compiler may resolve them.
+- picolibc snprintf blocked — pulls 78KB double-precision Ryu engine, overflows 64K. Would need `__IO_DEFAULT='i'` rebuild.
+
+## 2026-02-09 DONE Recompiled picolibc libc.a — all 3 libc bugs resolved
+
+**What**: Rebuilt picolibc libc.a (895 objects at -Oz) with the fixed compiler. All 3 previously broken functions now work: strncpy (was infinite loop), strtol/atoi (was returning -4 for "42"), strrchr (was infinite loop).
+
+**Where**: `libi8085/picolibc/build.sh` → `sysroot/lib/libc.a`. Verified with test programs for strncpy, strtol, strrchr.
+
+**Why**: The old libc.a was compiled by a pre-fix compiler that had DAD-clobbers-carry, STORE_8 SrcIsHL, and LOAD_8 LIFO bugs. Recompiling with the current compiler resolved all three.
+
+**Technical notes**: 60/60 benchmarks pass. stl_test2 33/33 at O0/O1/O2/Os. Key insight: all "working" libc functions were hand-written ASM in libgcc.a (memset, memcpy, strlen, strcmp, memchr); all "broken" ones came from picolibc's compiled C in libc.a.
+
+## 2026-02-09 FIX O1 Machine LICM stale dead flag on implicit-def $hl
+
+**What**: Fixed O1-only bug where Machine LICM hoists GR32 pseudo instructions to loop preheaders, preserving a stale `dead` flag on `implicit-def $hl`. The expand-pseudo pass then skips PUSH H/POP H preservation, and the expansion clobbers HL (which now holds a live loop index phi).
+
+**Where**: `llvm-project/llvm/lib/Target/I8085/I8085ExpandPseudoInsts32.cpp` (lines 2344-2359). Submodule commit bdef3938ea51.
+
+**Why**: While loops with 3+ exit paths generate `switch i32` at O1, with an i32 phi whose LOAD_32 initialization gets hoisted by LICM. At the original position HL wasn't live, but at the hoisted position it IS live-out to the loop header.
+
+**Technical notes**:
+- Fix: defensive LivePhysRegs recomputation when `implicit-def $hl` is marked dead — recomputes actual liveness from block live-outs by stepping backward. If HL is live despite dead flag, forces NeedHLSave=true.
+- Minimal repro `/tmp/switch_loop_extern.c` now correct at O0/O1/O2/Os/Oz.
+- lz_stress2 LZ77 stress test still fails at O1 (1/7) — this is a DIFFERENT O1 bug (no PUSH H emitted at all, so the LICM stale-flag fix doesn't trigger). Needs separate investigation.
+
 ---
 *Last Updated: 2026-02-09*
