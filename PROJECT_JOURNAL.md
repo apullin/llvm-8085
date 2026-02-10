@@ -326,5 +326,35 @@
 - Also eliminated DiffMBB indirection in JMP_32_IF_NOT_EQUAL, using direct jumps with explicit JNZ+JMP in every comparison block (fixes analyzeBranch)
 - All 15 benchmarks pass at O0/O1/O2/Os (60/60 HALTED), submodule commit d3493829
 
+## 2026-02-08 DONE C++ support: global constructors, virtual dispatch, new/delete
+
+**What**: Added full C++ support to the i8085 toolchain. Classes, templates, virtual dispatch, global constructors, and dynamic allocation (new/delete) all work at O0/O1/O2/Os.
+
+**Where**: `I8085AsmPrinter.cpp` (emitXXStructor fix), `sysroot/crt/crt0.S` (.init_array iteration + _exit stub), `sysroot/ldscripts/*.ld` (.init_array/.fini_array + heap symbols), `sysroot/libi8085/builtins/malloc.S` (bump allocator), `tooling/examples/cpp_test/cpp_test.cpp`
+
+**Why**: C++ is the final language feature needed for a complete toolchain. The port now supports C and C++ with full optimization.
+
+**Technical notes**:
+- Root cause of empty .init_array: `I8085AsmPrinter::emitXXStructor` overrode the base class with an empty body, silently discarding all `@llvm.global_ctors` entries. One-line fix: call `AsmPrinter::emitXXStructor(DL, CV)`.
+- picolibc's malloc (compiled by our backend) has a codegen bug: dereferences NULL free list pointer instead of checking it. Workaround: hand-written bump allocator (malloc.S) linked ahead of libc.a. free() is a no-op.
+- CRT0 uses PCHL trampoline for indirect calls to .init_array function pointers (8085 has no indirect CALL instruction).
+- `wchar_t` typedef in stddef.h guarded with `#ifndef __cplusplus` (it's a built-in keyword in C++).
+- Compiler flags: `-fno-exceptions -fno-rtti -fno-threadsafe-statics` (unwinding tables and RTTI would blow ROM budget).
+
+## 2026-02-09 FIX Branchless sort codegen - STORE_8 SrcIsHL and LOAD_8_WITH_ADDR LIFO order
+
+**What**: Fixed two pseudo expansion bugs that caused branchless sorting networks (libc++ `__cond_swap` / `__partially_sorted_swap`) to produce wrong results. Removed the `&& false` workaround from `sort.h` that disabled branchless sort on i8085.
+
+**Where**: `llvm-project/llvm/lib/Target/I8085/I8085ExpandPseudoInsts.cpp` (STORE_8 expansion ~line 577-668, LOAD_8_WITH_ADDR expansion ~line 1003-1068), `sysroot/include/c++/v1/__algorithm/sort.h` (removed `#ifdef __i8085__ && false #endif` at line 151)
+
+**Why**: Register allocator can assign H or L to 8-bit operands (GR8 class includes H/L). Pseudo expansion uses LXI+DAD to compute stack addresses, which clobbers HL. Two distinct failure modes:
+
+**Technical notes**:
+- **Bug 1 (STORE_8 SrcIsHL, O2/Os)**: When srcReg is H or L and baseReg != HL, `LXI H,offset / DAD SP` destroys the source value before `MOV M,src`. Fix: detect `SrcIsHL`, emit `MOV A,src` before LXI, then use `MOV M,A`. Need PSW save if A was already live.
+- **Bug 2 (LOAD_8_WITH_ADDR OtherSubLive, O1)**: When destReg is H (or L) and the other sub-register L (or H) is live, expansion uses A as temp: PUSH H, PUSH PSW, LXI+DAD, MOV A,M, POP H, MOV dest,A, POP PSW. But PUSH H first / PUSH PSW second means POP H actually pops PSW (LIFO!), putting flags byte 0x46 into L. Fix: when OtherSubLive, swap push order to PUSH PSW first, PUSH H second.
+- Trace forensics: L=0x46 came from POP H at step 724, which popped PSW value (A=0x14, flags=0x46) instead of saved HL. The 0x46 flags byte propagated through the sort network to the final output.
+- Lesson: when pseudo expansion has multiple PUSH/POP pairs with different pop orders in different code paths, each path needs its own push order to maintain LIFO correctness.
+- Verification: sort5 branchless test correct at O0/O1/O2/Os/Oz. stl_test2 33/33 bytes at all opt levels. 60/60 benchmarks HALTED.
+
 ---
-*Last Updated: 2026-02-08*
+*Last Updated: 2026-02-09*

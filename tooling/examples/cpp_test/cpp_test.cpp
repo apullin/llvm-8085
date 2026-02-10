@@ -48,7 +48,7 @@ T add(T a, T b) { return a + b; }
 /*=== Test 4: Dynamic allocation ===*/
 
 extern "C" int main() {
-    volatile uint8_t *out = (volatile uint8_t *)0x0200;
+    volatile uint8_t *out = (volatile uint8_t *)0xE000;
 
     /* Test 1: Global constructor ran before main */
     out[0] = (uint8_t)g_counter.get();   /* expect 0x2A (42) */
