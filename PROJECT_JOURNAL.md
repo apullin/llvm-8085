@@ -393,5 +393,56 @@
 - Minimal repro `/tmp/switch_loop_extern.c` now correct at O0/O1/O2/Os/Oz.
 - lz_stress2 LZ77 stress test still fails at O1 (1/7) — this is a DIFFERENT O1 bug (no PUSH H emitted at all, so the LICM stale-flag fix doesn't trigger). Needs separate investigation.
 
+## 2026-02-10 DONE Rust compiles and runs on i8085
+
+**What**: Brought up Rust (#![no_std]) targeting the Intel 8085. Built rustc 1.88.0 from source linked against our custom LLVM 20 fork. Compiled Rust's `core` library and `compiler_builtins` for i8085. A minimal test crate (arithmetic, control flow, loops) runs correctly on the i8085-trace simulator — all 4 tests pass.
+
+**Where**:
+- `rust-i8085/` — Rust 1.88.0 source, custom bootstrap.toml
+- `rust-i8085/compiler/rustc_target/src/callconv/i8085.rs` — Rust ABI for i8085
+- `rust-i8085/compiler/rustc_codegen_llvm/src/llvm_util.rs` — f16/f128 disabled for i8085
+- `tooling/examples/rust_test/` — test crate, target spec JSON, Cargo.toml
+- `llvm-project/llvm/lib/Target/I8085/I8085ISelLowering.cpp` — ISel fixes for Rust
+
+**Why**: Extending the i8085 toolchain beyond C/C++ to support Rust's `#![no_std]` ecosystem.
+
+**Technical notes**:
+- Key ISel fixes: (1) Changed all Custom i64 ops to Expand (avoids BUILD_PAIR i64 surviving to ISel), (2) CanLowerReturn limited to 4 bytes (forces sret for i64 returns), (3) UMULO/SMULO i32 rewritten to use `emitMul32LoHi` helper (calls __mului32/__mulsi32 via sret, loads lo/hi as separate i32 — avoids creating i64 DAG nodes during operation legalization), (4) Removed TRUNCATE i32 Custom handler.
+- `CARGO_FEATURE_NO_F16_F128=1` required to disable f128/f16 builtins (overflow 16-bit address space).
+- Build: `python3 x.py build --stage 1 library` (~40s), then `cargo +i8085 build -Z build-std=core --target i8085-unknown-none.json` (~43s).
+- Target spec includes pre-link-args for CRT0, linker script, --gc-sections, and post-link-args for libgcc.a + libc.a.
+- Test output: `0200: 2A 9B 01 37` — 42 (i16 add), 155 (u8 add), 1 (branch), 55 (loop sum). 44 steps, 278 cycles.
+- All 56 C benchmarks (14 × 4 opt levels) still HALTED after ISel changes.
+
+## 2026-02-10 DONE SIGN_EXTEND_16 pseudo for ashr i16 x, 15
+
+**What**: Added new SIGN_EXTEND_16 pseudo instruction that replaces `ashr i16 x, 15` (sign bit extraction) with 5 instructions instead of ~61 (ASR_16_BY_8 + 7 rotates).
+
+**Where**: `I8085InstrInfo.td` (pseudo def), `I8085ExpandPseudoInsts.cpp` (expansion), `I8085ISelDAGToDAG.cpp` (ISel special case for ShiftAmt==15)
+
+**Why**: The `int / 256` pattern in lpf_step generates `ashr i16 x, 15` for sign extraction (rounding correction). This expanded to ASR_16_BY_8 + 7×ASR_16 = ~61 machine instructions. With inlining duplicating this 4×, it accounted for the majority of rotate bloat (153 RAR/RAL instructions at -Os).
+
+**Technical notes**: Expansion: `MOV A,H; ADI 128; SBB A; MOV L,A; MOV H,A`. The ADI 128 trick converts bit7 to carry, then SBB A produces 0xFF (negative) or 0x00 (positive). Results: -Os 3613→3445B (-168B), -Os-noinline 2178→2122B (-56B), rotates 153→90 (-41%).
+
+## 2026-02-10 DISCOVERY LLVM inliner cost model is TTI-independent
+
+**What**: Investigated why pid_step (cost=5, threshold=45) is inlined at -Os despite TTI cost increases. Found that the LLVM inliner uses its own hardcoded cost model (`InstrCost=5` per IR instruction), completely independent of TTI's `getArithmeticInstrCost`.
+
+**Where**: `llvm/lib/Analysis/InlineCost.cpp` (InlineCostCallAnalyzer), `llvm/include/llvm/Analysis/TargetTransformInfo.h` (hook signatures)
+
+**Why**: TTI cost changes (i16 type scale 2→4, shift costs 2→8 multiplier) only affect loop unrolling/vectorization, NOT inlining. No standard TTI hook can reduce the -Os inline threshold: `adjustInliningThreshold` returns unsigned (can only increase), `getInliningThresholdMultiplier` returns unsigned (minimum 1), `getInlinerVectorBonusPercent` has `assert(VectorBonus >= 0)`.
+
+**Technical notes**: pid_step's inline cost = 5 because: ~15 non-free IR instructions × 5 = 75, minus callsite savings (8 args × 5 + 5 call + penalty ≈ 70) = net 5. The 906B gap between -Os (3445B) and -Oz (2539B) comes entirely from `minsize` backend attribute — both make identical inlining decisions. Workarounds: `-Oz`, `-fno-inline`, `__attribute__((noinline))`, or `-mllvm -inline-threshold=N`.
+
+## 2026-02-10 FIX -Os inlining bug — function-inline-threshold override
+
+**What**: Fixed LLVM's -Os inliner making code LARGER on i8085 by injecting `function-inline-threshold="0"` attribute on all optsize/minsize functions. This limits inlining to only net-beneficial cases (cost ≤ 0), preventing the inliner from duplicating function bodies that expand to hundreds of bytes of machine code when a CALL is only 3 bytes.
+
+**Where**: `I8085TargetMachine.h` (registerPassBuilderCallbacks declaration), `I8085TargetMachine.cpp` (I8085AnnotateInlineThresholdPass struct + registerPassBuilderCallbacks implementation)
+
+**Why**: The LLVM inliner's IR-level cost model (InstrCost=5) underestimates machine code expansion on 8-bit i8085 where each IR instruction expands to 4-10 machine instructions. pid_step (cost=5, threshold=45) and lpf_step (cost=15, threshold=45) were both inlined at -Os, duplicating ~300B+ of machine code each. A 1980 non-optimizing Small-C compiler produced 2x smaller code by simply using subroutine calls.
+
+**Technical notes**: Uses `registerPassBuilderCallbacks` to inject a module pass via `PipelineEarlySimplificationEPCallback` (runs BEFORE inliner). The `function-inline-threshold` attribute completely replaces all prior threshold computations at `InlineCost.cpp:finalizeAnalysis()` line 1019. With threshold=0, effective comparison is `cost < max(1, 0)` → `cost < 1`. Only cost ≤ 0 inlines (like readADC/writePWM wrappers) proceed. Results: -Os obj text 1937B (was 3445B linked), now SMALLER than -Os -fno-inline (2122B) because beneficial wrapper inlines still occur. -Oz obj text 1974B (was 2539B). 75/75 benchmarks pass, zero regressions.
+
 ---
-*Last Updated: 2026-02-09*
+*Last Updated: 2026-02-10*
