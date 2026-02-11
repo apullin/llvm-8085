@@ -6,3 +6,7 @@
 	path = FreeRTOS-Kernel
 	url = https://github.com/apullin/FreeRTOS-Kernel.git
 	branch = i8085
+[submodule "rust-i8085"]
+	path = rust-i8085
+	url = https://github.com/apullin/rust.git
+	branch = i8085
