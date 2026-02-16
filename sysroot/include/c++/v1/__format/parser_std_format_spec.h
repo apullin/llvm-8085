@@ -319,10 +319,14 @@ struct __parsed_specifications {
 
 // Validate the struct is small and cheap to copy since the struct is passed by
 // value in formatting functions.
+#  ifndef __i8085__
 static_assert(sizeof(__parsed_specifications<char>) == 16);
+#  endif
 static_assert(is_trivially_copyable_v<__parsed_specifications<char>>);
 #  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#    ifndef __i8085__
 static_assert(sizeof(__parsed_specifications<wchar_t>) == 16);
+#    endif
 static_assert(is_trivially_copyable_v<__parsed_specifications<wchar_t>>);
 #  endif
 
