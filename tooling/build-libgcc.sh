@@ -5,6 +5,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLBIN="${TOOLBIN:-$ROOT/llvm-project/build-clang-8085/bin}"
 SYSROOT="${SYSROOT:-$ROOT/sysroot}"
 
+# Parse --undoc flag
+UNDOC=0
+for arg in "$@"; do
+  if [[ "$arg" == "--undoc" ]]; then
+    UNDOC=1
+  fi
+done
+
 CLANG="${TOOLBIN}/clang"
 LLC="${TOOLBIN}/llc"
 AR="${TOOLBIN}/llvm-ar"
@@ -13,6 +21,13 @@ BUILTINS_DIR="${ROOT}/llvm-project/compiler-rt/lib/builtins"
 LIBI8085_DIR="${SYSROOT}/libi8085"
 LIBI8085_BUILTINS_DIR="${LIBI8085_DIR}/builtins"
 OUT_DIR="${SYSROOT}/lib/builtins"
+
+# Extra flags for undocumented instruction support
+ASM_UNDOC_FLAGS=""
+if [[ "${UNDOC}" -eq 1 ]]; then
+  ASM_UNDOC_FLAGS="-DUNDOC -Xclang -target-feature -Xclang +undoc"
+  echo "Building with undocumented 8085 instruction support"
+fi
 
 if [[ ! -x "${CLANG}" || ! -x "${LLC}" || ! -x "${AR}" ]]; then
   echo "missing toolchain in ${TOOLBIN}" >&2
@@ -127,7 +142,8 @@ done
 
 # Target-specific helpers.
 if [[ -f "${LIBI8085_BUILTINS_DIR}/clzsi2.S" ]]; then
-  "${CLANG}" -target i8085-unknown-elf -c "${LIBI8085_BUILTINS_DIR}/clzsi2.S" \
+  # shellcheck disable=SC2086
+  "${CLANG}" -target i8085-unknown-elf ${ASM_UNDOC_FLAGS} -c "${LIBI8085_BUILTINS_DIR}/clzsi2.S" \
     -o "${OUT_DIR}/clzsi2.o"
 else
   echo "missing source: ${LIBI8085_BUILTINS_DIR}/clzsi2.S" >&2
@@ -151,7 +167,8 @@ for helper in memops int_mul int_div int_shift int_shift64 int_arith64 int_divdi
     echo "missing source: ${src}" >&2
     exit 1
   fi
-  "${CLANG}" -target i8085-unknown-elf -c "${src}" -o "${OUT_DIR}/${helper}.o"
+  # shellcheck disable=SC2086
+  "${CLANG}" -target i8085-unknown-elf ${ASM_UNDOC_FLAGS} -c "${src}" -o "${OUT_DIR}/${helper}.o"
 done
 
 for helper in floatdisf floatundisf; do
@@ -167,7 +184,13 @@ for helper in floatdisf floatundisf; do
     "${tmpdir}/${helper}.bc" -o "${OUT_DIR}/${helper}.o"
 done
 
-rm -f "${SYSROOT}/lib/libgcc.a"
-"${AR}" rcs "${SYSROOT}/lib/libgcc.a" "${OUT_DIR}"/*.o
+if [[ "${UNDOC}" -eq 1 ]]; then
+  LIBGCC_OUT="${SYSROOT}/lib/libgcc-undoc.a"
+else
+  LIBGCC_OUT="${SYSROOT}/lib/libgcc.a"
+fi
 
-echo "libgcc rebuilt into ${SYSROOT}/lib/libgcc.a"
+rm -f "${LIBGCC_OUT}"
+"${AR}" rcs "${LIBGCC_OUT}" "${OUT_DIR}"/*.o
+
+echo "libgcc rebuilt into ${LIBGCC_OUT}"

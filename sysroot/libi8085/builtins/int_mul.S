@@ -81,11 +81,18 @@ __mul8:
 	.type	__mul16,@function
 __mul16:
 	; Load a (multiplicand) into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b (multiplier) into BC
 	lxi	h, 4
@@ -288,11 +295,18 @@ __mul32:
 	.type	__mulsi16,@function
 __mulsi16:
 	; Load a into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b into BC (temporarily)
 	lxi	h, 4
@@ -478,11 +492,18 @@ __mulsi16:
 	.type	__mulsi16_shr8,@function
 __mulsi16_shr8:
 	; Load a into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b into BC
 	lxi	h, 4
@@ -651,11 +672,18 @@ __mulsi16_shr8:
 	.type	__mulsi16_hi16,@function
 __mulsi16_hi16:
 	; Load a into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b into BC
 	lxi	h, 4
@@ -833,11 +861,18 @@ __mulsi16_hi16:
 	.type	__mulsi16_lo16,@function
 __mulsi16_lo16:
 	; Load a (multiplicand) into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b (multiplier) into BC
 	lxi	h, 4
@@ -1169,9 +1204,14 @@ __mulsi8_lo8:
 __mulsi32:
 	; Compute result sign: XOR sign bytes of a and b
 	; a[3] is at [SP+7], b[3] is at [SP+11]
+#ifdef UNDOC
+	ldsi	7
+	ldax	d		; a[3] (sign byte of a)
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m		; a[3] (sign byte of a)
+#endif
 	lxi	h, 11
 	dad	sp
 	xra	m		; XOR with b[3]
@@ -1179,9 +1219,14 @@ __mulsi32:
 
 	; --- Make a (multiplier) unsigned ---
 	; a is at [SP+6..9] (pushed sign +2)
+#ifdef UNDOC
+	ldsi	9
+	ldax	d
+#else
 	lxi	h, 9
 	dad	sp		; -> a[3]
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32_a_pos
 
@@ -1211,9 +1256,14 @@ __mulsi32:
 
 	; --- Make b (multiplicand) unsigned ---
 	; b is at [SP+10..13] (pushed sign +2)
+#ifdef UNDOC
+	ldsi	13
+	ldax	d
+#else
 	lxi	h, 13
 	dad	sp		; -> b[3]
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32_b_pos
 
@@ -1607,9 +1657,14 @@ __mulsi32:
 	.type	__mulsi32_shr16,@function
 __mulsi32_shr16:
 	; Compute result sign: XOR sign bytes of a and b
+#ifdef UNDOC
+	ldsi	5
+	ldax	d		; a[3]
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m		; a[3]
+#endif
 	lxi	h, 9
 	dad	sp
 	xra	m		; XOR with b[3]
@@ -1617,9 +1672,14 @@ __mulsi32_shr16:
 
 	; --- Make a unsigned ---
 	; a at [SP+4..7] (sign push +2)
+#ifdef UNDOC
+	ldsi	7
+	ldax	d
+#else
 	lxi	h, 7
 	dad	sp		; -> a[3]
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32s16_a_pos
 
@@ -1648,9 +1708,14 @@ __mulsi32_shr16:
 
 	; --- Make b unsigned ---
 	; b at [SP+8..11] (sign push +2)
+#ifdef UNDOC
+	ldsi	11
+	ldax	d
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32s16_b_pos
 
@@ -1942,18 +2007,28 @@ __mulsi32_shr16:
 	.type	__mulsi32_hi32,@function
 __mulsi32_hi32:
 	; Compute result sign
+#ifdef UNDOC
+	ldsi	5
+	ldax	d		; a[3]
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m		; a[3]
+#endif
 	lxi	h, 9
 	dad	sp
 	xra	m		; XOR with b[3]
 	push	psw		; save sign flag
 
 	; --- Make a unsigned ---
+#ifdef UNDOC
+	ldsi	7
+	ldax	d
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32h_a_pos
 
@@ -1981,9 +2056,14 @@ __mulsi32_hi32:
 .Lms32h_a_pos:
 
 	; --- Make b unsigned ---
+#ifdef UNDOC
+	ldsi	11
+	ldax	d
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lms32h_b_pos
 
@@ -2359,11 +2439,18 @@ __mului8:
 	.type	__mului16,@function
 __mului16:
 	; Load a into DE (multiplier)
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Load b into BC (multiplicand)
 	lxi	h, 4
@@ -2817,9 +2904,14 @@ __muldi3:
 	jz	.Lmd3_mul_done
 
 	; --- Test bit 0 of multiplier ---
+#ifdef UNDOC
+	ldsi	12
+	ldax	d
+#else
 	lxi	h, 12
 	dad	sp
 	mov	a, m
+#endif
 	ani	1
 	jz	.Lmd3_no_add
 

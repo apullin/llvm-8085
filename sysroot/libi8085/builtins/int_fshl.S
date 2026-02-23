@@ -19,9 +19,14 @@
 	.type	__fshlsi3,@function
 __fshlsi3:
 	; Load shift amount, mask to 0-31
+#ifdef UNDOC
+	ldsi	10
+	ldax	d
+#else
 	lxi	h, 10
 	dad	sp
 	mov	a, m
+#endif
 	ani	31
 	ora	a
 	jz	.Lfshlsi_zero	; n == 0, return hi
@@ -341,9 +346,14 @@ __fshlsi3:
 	.type	__fshrsi3,@function
 __fshrsi3:
 	; Load shift amount
+#ifdef UNDOC
+	ldsi	10
+	ldax	d
+#else
 	lxi	h, 10
 	dad	sp
 	mov	a, m
+#endif
 	ani	31
 	ora	a
 	jz	.Lfshrsi_zero	; n == 0, return lo

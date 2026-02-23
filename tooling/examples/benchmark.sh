@@ -17,6 +17,7 @@ TRACE="${TRACE:-$ROOT/i8085-trace/build/i8085-trace}"
 CRT="${CRT:-$ROOT/sysroot/crt/crt0.S}"
 LIBGCC="${LIBGCC:-$ROOT/sysroot/lib/libgcc.a}"
 LIBC="${LIBC:-$ROOT/sysroot/lib/libc.a}"
+CLANG_EXTRA="${CLANG_EXTRA:-}"  # Extra flags for clang (e.g. undoc feature)
 LINKER_DEFAULT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom.ld"
 LINKER_INPUT="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input.ld"
 LINKER_INPUT48="$ROOT/sysroot/ldscripts/i8085-32kram-32krom-input48.ld"
@@ -154,19 +155,22 @@ build_and_run() {
   mkdir -p "${outdir}"
 
   # Compile CRT
+  # shellcheck disable=SC2086
   "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin -${opt} \
-    -c "${CRT}" -o "${outdir}/crt0.o" 2>/dev/null
+    ${CLANG_EXTRA} -c "${CRT}" -o "${outdir}/crt0.o" 2>/dev/null
 
   # Compile source
+  # shellcheck disable=SC2086
   "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin -${opt} \
-    -c "${src}" -o "${outdir}/${bench}.o" 2>/dev/null
+    ${CLANG_EXTRA} -c "${src}" -o "${outdir}/${bench}.o" 2>/dev/null
 
   # Check for extra input files
   local extra_obj=()
   local extra_src="${ROOT}/tooling/examples/${bench}/${bench}_inputs.c"
   if [[ -f "${extra_src}" ]]; then
+    # shellcheck disable=SC2086
     "${CLANG}" --target=i8085-unknown-elf -ffreestanding -fno-builtin -${opt} \
-      -c "${extra_src}" -o "${outdir}/${bench}_inputs.o" 2>/dev/null
+      ${CLANG_EXTRA} -c "${extra_src}" -o "${outdir}/${bench}_inputs.o" 2>/dev/null
     extra_obj=("${outdir}/${bench}_inputs.o")
   fi
 

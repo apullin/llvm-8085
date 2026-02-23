@@ -14,9 +14,14 @@
 	.type	__ctzsi2,@function
 __ctzsi2:
 	; Byte 0 (LSB) at SP+2
+#ifdef UNDOC
+	ldsi	2
+	ldax	d
+#else
 	lxi	h, 2
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jz	.Lctz32_byte1
 

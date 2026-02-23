@@ -52,11 +52,18 @@ __adddi3:
 	push	h		; push b[3](H), b[2](L) for mid-chain POP  [SP -= 2]
 
 	; ---- Load sret pointer into DE ----
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h		; DE = sret pointer
+#else
 	lxi	h, 4		; sret at original SP+2, now SP+2+2 = 4
 	dad	sp		;                       [DAD #2]
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret pointer
+#endif
 
 	; ---- Point HL to a[0] ----
 	lxi	h, 6		; a[0] at original SP+4, now SP+4+2 = 6
@@ -211,11 +218,18 @@ __subdi3:
 	push	h		; push b[3](H), b[2](L)  [SP -= 2]
 
 	; ---- Load sret pointer into DE ----
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h		; DE = sret pointer
+#else
 	lxi	h, 4		; sret at SP+2+2 = 4
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret pointer
+#endif
 
 	; ---- Point HL to a[0] ----
 	lxi	h, 6		; a[0] at SP+4+2 = 6
@@ -338,11 +352,18 @@ __subdi3:
 	.type	__anddi3,@function
 __anddi3:
 	; Load sret pointer into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h		; DE = sret pointer
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret pointer
+#endif
 
 	; Process byte 0
 	lxi	h, 4
@@ -440,11 +461,18 @@ __anddi3:
 	.type	__ordi3,@function
 __ordi3:
 	; Load sret pointer into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Byte 0
 	lxi	h, 4
@@ -542,11 +570,18 @@ __ordi3:
 	.type	__xordi3,@function
 __xordi3:
 	; Load sret pointer into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Byte 0
 	lxi	h, 4
@@ -644,11 +679,18 @@ __xordi3:
 	.type	__negdi2,@function
 __negdi2:
 	; Load sret pointer into DE
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h		; DE = sret pointer
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret pointer
+#endif
 
 	; Complement and add 1 with carry chain
 	; Byte 0: ~a[0] + 1
@@ -1014,9 +1056,14 @@ __cmpdi2:
 .Lcmpdi2_same_sign:
 	; Same sign: compare unsigned from MSB (byte 7) to LSB (byte 0)
 	; Compare byte 7
+#ifdef UNDOC
+	ldsi	9
+	ldax	d		; a[7]
+#else
 	lxi	h, 9
 	dad	sp
 	mov	a, m		; a[7]
+#endif
 	lxi	h, 17
 	dad	sp
 	cmp	m		; compare a[7] vs b[7]
@@ -1024,9 +1071,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2	; a[7] > b[7] -> a > b
 
 	; Byte 6
+#ifdef UNDOC
+	ldsi	8
+	ldax	d
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 16
 	dad	sp
 	cmp	m
@@ -1034,9 +1086,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 5
+#ifdef UNDOC
+	ldsi	7
+	ldax	d
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 15
 	dad	sp
 	cmp	m
@@ -1044,9 +1101,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 4
+#ifdef UNDOC
+	ldsi	6
+	ldax	d
+#else
 	lxi	h, 6
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 14
 	dad	sp
 	cmp	m
@@ -1054,9 +1116,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 3
+#ifdef UNDOC
+	ldsi	5
+	ldax	d
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 13
 	dad	sp
 	cmp	m
@@ -1064,9 +1131,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 2
+#ifdef UNDOC
+	ldsi	4
+	ldax	d
+#else
 	lxi	h, 4
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 12
 	dad	sp
 	cmp	m
@@ -1074,9 +1146,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 1
+#ifdef UNDOC
+	ldsi	3
+	ldax	d
+#else
 	lxi	h, 3
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 11
 	dad	sp
 	cmp	m
@@ -1084,9 +1161,14 @@ __cmpdi2:
 	jnz	.Lcmpdi2_ret2
 
 	; Byte 0
+#ifdef UNDOC
+	ldsi	2
+	ldax	d
+#else
 	lxi	h, 2
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 10
 	dad	sp
 	cmp	m
@@ -1127,9 +1209,14 @@ __cmpdi2:
 	.type	__ucmpdi2,@function
 __ucmpdi2:
 	; Compare byte 7 (MSB)
+#ifdef UNDOC
+	ldsi	9
+	ldax	d		; a[7]
+#else
 	lxi	h, 9
 	dad	sp
 	mov	a, m		; a[7]
+#endif
 	lxi	h, 17
 	dad	sp
 	cmp	m		; compare a[7] vs b[7]
@@ -1137,9 +1224,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2	; a > b
 
 	; Byte 6
+#ifdef UNDOC
+	ldsi	8
+	ldax	d
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 16
 	dad	sp
 	cmp	m
@@ -1147,9 +1239,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 5
+#ifdef UNDOC
+	ldsi	7
+	ldax	d
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 15
 	dad	sp
 	cmp	m
@@ -1157,9 +1254,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 4
+#ifdef UNDOC
+	ldsi	6
+	ldax	d
+#else
 	lxi	h, 6
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 14
 	dad	sp
 	cmp	m
@@ -1167,9 +1269,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 3
+#ifdef UNDOC
+	ldsi	5
+	ldax	d
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 13
 	dad	sp
 	cmp	m
@@ -1177,9 +1284,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 2
+#ifdef UNDOC
+	ldsi	4
+	ldax	d
+#else
 	lxi	h, 4
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 12
 	dad	sp
 	cmp	m
@@ -1187,9 +1299,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 1
+#ifdef UNDOC
+	ldsi	3
+	ldax	d
+#else
 	lxi	h, 3
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 11
 	dad	sp
 	cmp	m
@@ -1197,9 +1314,14 @@ __ucmpdi2:
 	jnz	.Lucmpdi2_ret2
 
 	; Byte 0 (LSB)
+#ifdef UNDOC
+	ldsi	2
+	ldax	d
+#else
 	lxi	h, 2
 	dad	sp
 	mov	a, m
+#endif
 	lxi	h, 10
 	dad	sp
 	cmp	m

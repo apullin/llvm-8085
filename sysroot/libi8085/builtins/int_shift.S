@@ -15,9 +15,14 @@
 	.globl	__ashlsi3
 	.type	__ashlsi3,@function
 __ashlsi3:
+#ifdef UNDOC
+	ldsi	6
+	ldax	d		; A = shift amount
+#else
 	lxi	h, 6
 	dad	sp
 	mov	a, m		; A = shift amount
+#endif
 	ani	0x1F		; mask to 0-31 (sets Z if 0)
 	; Load value; lxi/dad/mov/inx preserve A and Z flag
 	lxi	h, 2
@@ -94,9 +99,14 @@ __ashlsi3:
 	.globl	__lshrsi3
 	.type	__lshrsi3,@function
 __lshrsi3:
+#ifdef UNDOC
+	ldsi	6
+	ldax	d
+#else
 	lxi	h, 6
 	dad	sp
 	mov	a, m
+#endif
 	ani	0x1F
 	lxi	h, 2
 	dad	sp
@@ -173,9 +183,14 @@ __lshrsi3:
 	.globl	__ashrsi3
 	.type	__ashrsi3,@function
 __ashrsi3:
+#ifdef UNDOC
+	ldsi	6
+	ldax	d
+#else
 	lxi	h, 6
 	dad	sp
 	mov	a, m
+#endif
 	ani	0x1F
 	lxi	h, 2
 	dad	sp

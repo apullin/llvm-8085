@@ -29,11 +29,18 @@
 	.type	memcpy,@function
 memcpy:
 	; Load n into DE
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	e, l		; n low
+	mov	d, h		; n high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	e, m		; n low
 	inx	h
 	mov	d, m		; n high
+#endif
 
 	; Load src into HL (will be used with MOV A,M / INX H)
 	lxi	h, 4
@@ -83,11 +90,18 @@ memcpy:
 	.type	memset,@function
 memset:
 	; Load n into DE
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	e, l		; n low
+	mov	d, h		; n high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	e, m		; n low
 	inx	h
 	mov	d, m		; n high
+#endif
 
 	; Load c (byte value) - only low byte
 	lxi	h, 4
@@ -134,11 +148,18 @@ memset:
 	.type	memmove,@function
 memmove:
 	; Load n into DE
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	e, l		; n low
+	mov	d, h		; n high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	e, m		; n low
 	inx	h
 	mov	d, m		; n high
+#endif
 
 	; Check if n == 0
 	mov	a, d
@@ -226,11 +247,18 @@ memmove:
 
 .Lmemmove_done_nop:
 	; n == 0, just return dst
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	c, l
+	mov	b, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	c, m
 	inx	h
 	mov	b, m
+#endif
 	ret
 	.size	memmove, .-memmove
 
@@ -245,11 +273,18 @@ memcmp:
 	; Compare using MOV A,M (s1) and LDAX D (s2).
 
 	; Load n into BC (temporary)
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	c, l		; n low
+	mov	b, h		; n high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	c, m		; n low
 	inx	h
 	mov	b, m		; n high
+#endif
 
 	; Check if n == 0
 	mov	a, b
@@ -260,11 +295,18 @@ memcmp:
 	push	b		; [SP] = n
 
 	; Load s2 into DE  (stack offsets shifted by 2 from push)
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	e, l		; s2 low
+	mov	d, h		; s2 high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	e, m		; s2 low
 	inx	h
 	mov	d, m		; s2 high
+#endif
 
 	; Load s1 into HL
 	lxi	h, 4

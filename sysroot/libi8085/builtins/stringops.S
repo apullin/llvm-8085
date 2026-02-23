@@ -29,12 +29,17 @@
 	.type	strlen,@function
 strlen:
 	; Load s into HL
+#ifdef UNDOC
+	ldsi	2
+	lhlx		; s low
+#else
 	lxi	h, 2
 	dad	sp
 	mov	a, m		; s low
 	inx	h
 	mov	h, m		; s high
 	mov	l, a		; HL = s
+#endif
 
 	; Counter in BC = 0
 	lxi	b, 0
@@ -59,11 +64,18 @@ strlen:
 	.type	strcmp,@function
 strcmp:
 	; Load s2 into DE
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l		; s2 low
+	mov	d, h		; s2 high
+#else
 	lxi	h, 4
 	dad	sp
 	mov	e, m		; s2 low
 	inx	h
 	mov	d, m		; s2 high
+#endif
 
 	; Load s1 into HL
 	lxi	h, 2
@@ -122,11 +134,18 @@ strcmp:
 	.type	memchr,@function
 memchr:
 	; Load length into DE
+#ifdef UNDOC
+	ldsi	6
+	lhlx
+	mov	e, l		; length low
+	mov	d, h		; length high
+#else
 	lxi	h, 6
 	dad	sp
 	mov	e, m		; length low
 	inx	h
 	mov	d, m		; length high
+#endif
 
 	; Load c (low byte only) into B
 	lxi	h, 4

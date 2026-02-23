@@ -444,5 +444,54 @@
 
 **Technical notes**: Uses `registerPassBuilderCallbacks` to inject a module pass via `PipelineEarlySimplificationEPCallback` (runs BEFORE inliner). The `function-inline-threshold` attribute completely replaces all prior threshold computations at `InlineCost.cpp:finalizeAnalysis()` line 1019. With threshold=0, effective comparison is `cost < max(1, 0)` → `cost < 1`. Only cost ≤ 0 inlines (like readADC/writePWM wrappers) proceed. Results: -Os obj text 1937B (was 3445B linked), now SMALLER than -Os -fno-inline (2122B) because beneficial wrapper inlines still occur. -Oz obj text 1974B (was 2539B). 75/75 benchmarks pass, zero regressions.
 
+## 2026-02-16 DONE Phase 3: Undocumented 8085 instruction codegen
+
+**What**: Implemented pseudo expansion paths for 6 undocumented 8085 instructions (LDSI, LHLX, SHLX, DSUB, ARHL, RDEL), gated behind `+undoc` feature flag. Also fixed per-function subtarget caching so `-Xclang -target-feature -Xclang +undoc` works from clang.
+
+**Where**: `I8085ExpandPseudoInsts.cpp` (8-bit/16-bit LDSI+LDAX/STAX, LDSI+LHLX/SHLX, DSUB, ARHL, RDEL paths), `I8085ExpandPseudoInsts32.cpp` (32-bit LDSI+LHLX/SHLX paths), `I8085TargetMachine.cpp/.h` (per-function subtarget caching via StringMap)
+
+**Why**: Undocumented instructions reduce code size for SP-relative stack access (the biggest codegen overhead on 8085). LDSI sets DE=SP+imm8 (2 bytes, no HL clobber), enabling LHLX/SHLX for 16-bit and LDAX/STAX for 8-bit memory access with far fewer instructions than the standard LXI+DAD+MOV sequence.
+
+**Technical notes**:
+- LDSI+SHLX is the workhorse: 112-139 uses per benchmark at O2 (div_torture: 361 total undoc insns)
+- Code size savings: O2 0.3-3.0%, O0 1.4-5.3% (div_torture: -1,088B/-3.6% at O0)
+- DSUB/ARHL don't fire naturally — register constraints (dest==HL, operand==BC) rarely met by regalloc
+- RDEL fires 3 times in arith64_torture
+- Root cause for clang path not working: `getSubtargetImpl(const Function &)` wasn't checking function attributes for target-features. Fixed with standard LLVM per-function subtarget caching pattern (StringMap).
+- 60/60 benchmarks HALTED with `+undoc`, no regressions
+
+## 2026-02-16 DONE Undocumented instruction support in hand-written runtime library
+
+**What**: Added `#ifdef UNDOC` / `#else` / `#endif` blocks to all 16 .S files in `sysroot/libi8085/builtins/`, replacing `lxi h,N; dad sp` patterns with undocumented LDSI+LDAX/STAX/LHLX/SHLX sequences. 96 total transforms across all files. Both standard (60/60) and undoc (60/60) benchmarks HALTED. Standard path produces bit-identical object code to originals.
+
+**Where**: `sysroot/libi8085/builtins/*.S` (16 files: softfp, int_arith64, int_mul, int_div, int_divdi3, int_shift, int_shift64, int_fshl, int_rotate, int_rotate64, memops, stringops, ctzsi2, clzdi2, ctzdi2, popcountsi2). Transform script: `/tmp/transform_undoc_v6.py`.
+
+**Why**: LDSI (DE=SP+imm8, 2 bytes) replaces the 4-byte `lxi h,N; dad sp` sequence for stack-relative access. Combined with LDAX D/STAX D (byte), LHLX/SHLX (16-bit), saves code size and cycles in the most performance-critical runtime routines.
+
+**Technical notes**:
+- v4 script (242 transforms) had bug: treated CALL as making DE dead (callees return in DE)
+- v5 script (115 transforms) had bug: `hl_used_after()` only checked ONE subsequent line, missing HL/M usage further down (e.g., `mov m,a` after `cma; adi 1`)
+- v6 script (96 transforms) fixed with forward scan: `hl_used_after_scan()` checks ALL lines until HL is killed (by lxi h, pop h, lhlx, xchg, xthl, call, ret, label, jmp, hlt)
+- Code size savings (undoc vs standard): string_torture O0 -9%, bitops_torture O0 -3.2%, float_torture O0 -2.3%, fp_bench O0 -1.9%, mul_torture O0 -1.8%
+- Cycle savings: string_torture O0 -5.8%, others 0.2-0.5%
+- libgcc.a: 59,544 bytes (standard) vs 59,360 bytes (undoc), -184 bytes
+- Build: `bash tooling/build-libgcc.sh --undoc` produces `libgcc-undoc.a`
+- Run: `LIBGCC=sysroot/lib/libgcc-undoc.a CLANG_EXTRA="-Xclang -target-feature -Xclang +undoc" bash tooling/examples/benchmark.sh`
+
+## 2026-02-16 DONE 8085 FreeRTOS port: SIM/RIM per-task interrupt mask
+
+**What**: Upgraded the 8085 FreeRTOS port to save/restore each task's RST 5.5/6.5/7.5 interrupt mask as part of the context switch, using RIM and SIM instructions. Stack frame grows from 8 to 10 bytes. All 5 demos pass.
+
+**Where**: `FreeRTOS-Kernel/portable/GCC/I8085/portasm.S` (vPortStartFirstTask, vPortYield, vPortTickISR), `port.c` (pxPortInitialiseStack), `portmacro.h` (comments)
+
+**Why**: Differentiates the 8085 port from the 8080 port with real hardware-level interrupt masking. Each task retains its own mask state across context switches — if a task unmasks RST 7.5 for a UART handler, that mask persists only while that task runs.
+
+**Technical notes**:
+- Save: `RIM; ANI 0x07; ORI 0x08; PUSH PSW` — reads mask, strips pending/IE bits, sets MSE=1 for SIM format
+- Restore: `POP PSW; SIM` — applies saved mask directly
+- RIM bits 0-2 (M5.5/M6.5/M7.5) match SIM bits 0-2, but bits 3-7 differ (IE/pending vs MSE/R7.5/SOD), hence the ANI+ORI
+- Initial task mask: 0x0D (MSE=1, M7.5=masked, M6.5=unmasked for tick, M5.5=masked) — matches startup.S
+- Critical sections still use DI/EI (not SIM) for safety — all maskable interrupts blocked during kernel ops
+
 ---
-*Last Updated: 2026-02-10*
+*Last Updated: 2026-02-16*

@@ -73,11 +73,18 @@ __udivmoddi4:
 	jnz	.Ludmd64_start
 
 	; Division by zero: write 0 to sret, 0 to rem if non-null
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	e, l
+	mov	d, h		; DE = sret
+#else
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m		; DE = sret
+#endif
 	xra	a
 	stax	d
 	inx	d
@@ -733,11 +740,18 @@ __umoddi3:
 	;   [SP+20..27] = b
 
 	; Push rem pointer = our sret pointer
+#ifdef UNDOC
+	ldsi	10
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 10
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 	push	d		; rem pointer (+2)
 
 	; Push divisor (b) from [SP+20+10=30... wait, shifted by temp(8)+push(2)=10]
@@ -849,9 +863,14 @@ __umoddi3:
 	.type	__divdi3,@function
 __divdi3:
 	; Compute result sign: XOR of sign bytes
+#ifdef UNDOC
+	ldsi	11
+	ldax	d		; a[7] (sign of a)
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m		; a[7] (sign of a)
+#endif
 	lxi	h, 19
 	dad	sp
 	xra	m		; XOR with b[7]
@@ -859,9 +878,14 @@ __divdi3:
 
 	; Make a unsigned (negate if negative)
 	; a[7] at SP+4+7+2=13
+#ifdef UNDOC
+	ldsi	13
+	ldax	d
+#else
 	lxi	h, 13
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Ldivdi3_a_pos
 
@@ -910,9 +934,14 @@ __divdi3:
 
 .Ldivdi3_a_pos:
 	; Make b unsigned
+#ifdef UNDOC
+	ldsi	21
+	ldax	d
+#else
 	lxi	h, 21		; b[7] at SP+12+7+2=21
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Ldivdi3_b_pos
 
@@ -1109,15 +1138,25 @@ __divdi3:
 	.type	__moddi3,@function
 __moddi3:
 	; Save dividend sign (remainder sign = dividend sign)
+#ifdef UNDOC
+	ldsi	11
+	ldax	d		; a[7]
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m		; a[7]
+#endif
 	push	psw		; save sign (+2)
 
 	; Make a unsigned
+#ifdef UNDOC
+	ldsi	13
+	ldax	d
+#else
 	lxi	h, 13
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lmoddi3_a_pos
 
@@ -1165,9 +1204,14 @@ __moddi3:
 
 .Lmoddi3_a_pos:
 	; Make b unsigned
+#ifdef UNDOC
+	ldsi	21
+	ldax	d
+#else
 	lxi	h, 21
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lmoddi3_b_pos
 

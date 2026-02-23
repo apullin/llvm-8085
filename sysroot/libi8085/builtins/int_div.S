@@ -131,11 +131,18 @@ __udiv8:
 	.type	__urem8,@function
 __urem8:
 	; Load args from our stack frame
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	b, l		; B = dividend
+	mov	d, h		; D = divisor
+#else
 	lxi	h, 2
 	dad	sp
 	mov	b, m		; B = dividend
 	inx	h
 	mov	d, m		; D = divisor
+#endif
 
 	; Push as args for __udivmod8
 	; __udivmod8 expects [SP+2]=dividend, [SP+3]=divisor
@@ -521,18 +528,32 @@ __sdivmod8:
 	.type	__udivmod16,@function
 __udivmod16:
 	; Load dividend into BC (temporarily)
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	c, l
+	mov	b, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	c, m
 	inx	h
 	mov	b, m
+#endif
 
 	; Load divisor into DE (temporarily to check for zero)
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 4
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Check for divide by zero
 	mov	a, d
@@ -709,18 +730,32 @@ __urem16:
 	.type	__sdiv16,@function
 __sdiv16:
 	; Load dividend into BC
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	c, l
+	mov	b, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	c, m
 	inx	h
 	mov	b, m
+#endif
 
 	; Load divisor into DE
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 4
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Compute result sign: XOR of high bytes
 	mov	a, b
@@ -798,18 +833,32 @@ __sdiv16:
 	.type	__srem16,@function
 __srem16:
 	; Load dividend into BC
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	c, l
+	mov	b, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	c, m
 	inx	h
 	mov	b, m
+#endif
 
 	; Load divisor into DE
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 4
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Save dividend sign (remainder sign = dividend sign)
 	mov	a, b
@@ -887,18 +936,32 @@ __srem16:
 	.type	__sdivmod16,@function
 __sdivmod16:
 	; Load dividend into BC
+#ifdef UNDOC
+	ldsi	2
+	lhlx
+	mov	c, l
+	mov	b, h
+#else
 	lxi	h, 2
 	dad	sp
 	mov	c, m
 	inx	h
 	mov	b, m
+#endif
 
 	; Load divisor into DE
+#ifdef UNDOC
+	ldsi	4
+	lhlx
+	mov	e, l
+	mov	d, h
+#else
 	lxi	h, 4
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
+#endif
 
 	; Save dividend sign (for remainder sign)
 	mov	a, b		; high byte of dividend
@@ -1413,9 +1476,14 @@ __urem32:
 	.type	__sdiv32,@function
 __sdiv32:
 	; Compute result sign: XOR of sign bytes
+#ifdef UNDOC
+	ldsi	5
+	ldax	d		; dividend[3]
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m		; dividend[3]
+#endif
 	lxi	h, 9
 	dad	sp
 	xra	m		; XOR with divisor[3]
@@ -1423,9 +1491,14 @@ __sdiv32:
 
 	; Make dividend unsigned (negate if negative)
 	; dividend at [SP+4..7] (sign push +2)
+#ifdef UNDOC
+	ldsi	7
+	ldax	d		; dividend[3]
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m		; dividend[3]
+#endif
 	ora	a
 	jp	.Lsd32_a_pos
 
@@ -1454,9 +1527,14 @@ __sdiv32:
 .Lsd32_a_pos:
 
 	; Make divisor unsigned
+#ifdef UNDOC
+	ldsi	11
+	ldax	d		; divisor[3]
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m		; divisor[3]
+#endif
 	ora	a
 	jp	.Lsd32_b_pos
 
@@ -1562,15 +1640,25 @@ __sdiv32:
 	.type	__srem32,@function
 __srem32:
 	; Save dividend sign (remainder sign = dividend sign)
+#ifdef UNDOC
+	ldsi	5
+	ldax	d		; dividend[3] (sign byte)
+#else
 	lxi	h, 5
 	dad	sp
 	mov	a, m		; dividend[3] (sign byte)
+#endif
 	push	psw		; save sign flag
 
 	; Make dividend unsigned
+#ifdef UNDOC
+	ldsi	7
+	ldax	d
+#else
 	lxi	h, 7
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lsr32_a_pos
 
@@ -1598,9 +1686,14 @@ __srem32:
 .Lsr32_a_pos:
 
 	; Make divisor unsigned
+#ifdef UNDOC
+	ldsi	11
+	ldax	d
+#else
 	lxi	h, 11
 	dad	sp
 	mov	a, m
+#endif
 	ora	a
 	jp	.Lsr32_b_pos
 

@@ -609,7 +609,10 @@ __ashrdi3:
 	sbb	a		; A = 0xFF if negative, 0x00 if positive
 	mov	d, a		; D = sign fill byte
 
-	; Shuffle: work[1..7] -> work[0..6]
+	; Shuffle right: work[0]=work[1], ..., work[6]=work[7], work[7]=sign
+	; Read from low to high (safe: read work[i+1] before write work[i])
+
+	; Batch 1: read work[1..4], write to work[0..3]
 	lxi	h, 3		; work[1] at SP+2+1=3
 	dad	sp
 	mov	c, m		; work[1]
@@ -617,68 +620,35 @@ __ashrdi3:
 	mov	b, m		; work[2]
 	inx	h
 	mov	e, m		; work[3]
-	; Store work[0..2]
-	lxi	h, 2		; work[0] at SP+2
+	inx	h
+	push	psw		; save shift amount again (SP-=2, offsets shift)
+	mov	a, m		; work[4] (now at SP+4+4=8, but HL already there)
+	lxi	h, 4		; work[0] at SP'+2+0=4 (after extra push, +2)
 	dad	sp
-	mov	m, c
+	mov	m, c		; work[0] = old work[1]
 	inx	h
-	mov	m, b
+	mov	m, b		; work[1] = old work[2]
 	inx	h
-	mov	m, e
+	mov	m, e		; work[2] = old work[3]
+	inx	h
+	mov	m, a		; work[3] = old work[4]
+	pop	psw		; restore (SP+=2, back to original layout)
 
-	; work[4..6] = work[5..7]
+	; Batch 2: read work[5..7], write to work[4..6], work[7]=sign
 	lxi	h, 7		; work[5] at SP+2+5=7
 	dad	sp
-	mov	c, m
+	mov	c, m		; work[5]
 	inx	h
 	mov	b, m		; work[6]
 	inx	h
 	mov	e, m		; work[7]
-	; Overwrite: work[3]=old_work[4]... wait, we loaded work[5,6,7]
-	; but we need work[4] too.
-	; Let me redo this more carefully.
-	pop	psw		; restore shift amount
-	push	psw		; re-save it
-
-	; Read all 8 bytes, shift, write back
-	; work[0..7] at SP+2..9
-	lxi	h, 3		; work[1]
-	dad	sp
-	mov	c, m		; new work[0] = old work[1]
-	inx	h
-	mov	b, m		; new work[1] = old work[2]
-	; Store first two
-	lxi	h, 2
-	dad	sp
-	mov	m, c
-	inx	h
-	mov	m, b
-
 	lxi	h, 6		; work[4] at SP+2+4=6
 	dad	sp
-	mov	c, m		; new work[3] = old work[4]
-	dcx	h
-	mov	b, m		; new work[2] = old work[3]
-	lxi	h, 4
-	dad	sp
-	mov	m, b		; work[2]
+	mov	m, c		; work[4] = old work[5]
 	inx	h
-	mov	m, c		; work[3]
-
-	lxi	h, 7		; work[5] at SP+2+5=7
-	dad	sp
-	mov	c, m		; new work[4] = old work[5]
+	mov	m, b		; work[5] = old work[6]
 	inx	h
-	mov	b, m		; new work[5] = old work[6]
-	inx	h
-	mov	e, m		; new work[6] = old work[7]
-	lxi	h, 6
-	dad	sp
-	mov	m, c		; work[4]
-	inx	h
-	mov	m, b		; work[5]
-	inx	h
-	mov	m, e		; work[6]
+	mov	m, e		; work[6] = old work[7]
 	inx	h
 	mov	m, d		; work[7] = sign fill byte
 

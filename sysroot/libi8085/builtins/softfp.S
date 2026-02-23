@@ -69,9 +69,15 @@
 	.globl	__negsf2
 	.type	__negsf2,@function
 __negsf2:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32
+#endif
 	mov	a, d
 	xri	0x80
 	mov	d, a
@@ -100,9 +106,15 @@ __subsf3:
 	.globl	__unordsf2
 	.type	__unordsf2,@function
 __unordsf2:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32		; load a
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32	; load a
+#endif
 	call	.Lcheck_nan_regs
 	jnz	.Lunord_yes
 	lxi	h, 6
@@ -140,9 +152,15 @@ __ltsf2:
 __nesf2:
 __cmpsf2:
 	; NaN check -> return +1
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32
+#endif
 	call	.Lcheck_nan_regs
 	jnz	.Lcmp_plus1
 	lxi	h, 6
@@ -168,9 +186,15 @@ __cmpsf2:
 	.type	__gtsf2,@function
 __gesf2:
 __gtsf2:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32
+#endif
 	call	.Lcheck_nan_regs
 	jnz	.Lcmp_minus1
 	lxi	h, 6
@@ -316,9 +340,15 @@ __gtsf2:
 	.globl	__fixunssfsi
 	.type	__fixunssfsi,@function
 __fixunssfsi:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Check sign -> if negative, return 0
 	mov	a, d
@@ -455,9 +485,15 @@ __fixunssfsi:
 	.type	__fixsfsi,@function
 __fixsfsi:
 	; Load a
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Save sign
 	mov	a, d
@@ -551,9 +587,15 @@ __fixsfsi:
 	.globl	__floatunsisf
 	.type	__floatunsisf,@function
 __floatunsisf:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Check if a == 0
 	mov	a, c
@@ -664,14 +706,24 @@ __floatunsisf:
 	jmp	.Lfunsisf_shl_lp
 
 .Lfunsisf_shr:
-	; Right-shift by (exponent - 23)
+	; Right-shift by (exponent - 23), with IEEE 754 rounding.
+	; For 32-bit unsigned, shift count is 1..8.
+	; Track guard and sticky bits for round-to-nearest-even.
 	mov	a, d
-	sui	23		; shift count
+	sui	23		; shift count (1..8)
 	mov	e, a		; E = shift count
+
+	; Save original byte0 before shifting (contains bits to be shifted out).
+	; Use C register (not needed for significand shifting).
+	lxi	h, 0
+	dad	sp
+	mov	c, m		; C = original byte0
+
+	; Shift loop: right-shift [SP+0..3] by E bits
 .Lfunsisf_shr_lp:
 	mov	a, e
 	ora	a
-	jz	.Lfunsisf_pack
+	jz	.Lfunsisf_shr_round
 	; Right-shift [SP+0..3] by 1
 	lxi	h, 3
 	dad	sp
@@ -693,6 +745,98 @@ __floatunsisf:
 	mov	m, a
 	dcr	e
 	jmp	.Lfunsisf_shr_lp
+
+.Lfunsisf_shr_round:
+	; C = original byte0 (contains the bits that were shifted out).
+	; D = exponent, shift_count = D - 23.
+	; The shifted-out bits are the low (shift_count) bits of C.
+	; Guard bit = bit (shift_count - 1) of C.
+	; Sticky = OR of bits (shift_count - 2) down to 0 of C.
+	;
+	; Build half = 1 << (shift_count - 1) = guard bit position mask
+	mov	a, d
+	sui	23		; A = shift count
+	mov	e, a		; E = shift count
+	mvi	a, 1
+	dcr	e
+	jz	.Lfunsisf_half_ok
+.Lfunsisf_half_mk:
+	add	a		; shift left
+	dcr	e
+	jnz	.Lfunsisf_half_mk
+.Lfunsisf_half_ok:
+	; A = half = 1 << (shift_count - 1)
+	mov	b, a		; B = half (guard bit mask)
+
+	; Build mask = (1 << shift_count) - 1
+	add	a		; A = 1 << shift_count
+	dcr	a		; A = mask
+	mov	e, a		; E = mask
+
+	; Extract shifted-out bits from original byte0
+	mov	a, c		; A = original byte0
+	ana	e		; A = shifted_out = orig_byte0 & mask
+	jz	.Lfunsisf_pack	; shifted_out == 0, no rounding needed
+
+	; A = shifted_out, B = half
+	; Compare shifted_out with half
+	cmp	b
+	jc	.Lfunsisf_pack	; shifted_out < half, truncate (no round)
+	jnz	.Lfunsisf_roundup ; shifted_out > half, round up
+
+	; shifted_out == half (exact tie): round to even
+	; Round up only if LSB of result is 1 (making it even)
+	lxi	h, 0
+	dad	sp
+	mov	a, m		; result byte0
+	ani	1		; test LSB
+	jz	.Lfunsisf_pack	; LSB=0, already even, truncate
+
+.Lfunsisf_roundup:
+	; Add 1 to [SP+0..3] (round up the significand)
+	lxi	h, 0
+	dad	sp
+	mov	a, m		; byte0
+	adi	1
+	mov	m, a
+	jnc	.Lfunsisf_pack	; no carry, done
+	inx	h
+	mov	a, m		; byte1
+	adi	0
+	aci	0
+	mov	m, a
+	jnc	.Lfunsisf_pack
+	inx	h
+	mov	a, m		; byte2
+	aci	0
+	mov	m, a
+	jnc	.Lfunsisf_pack
+	inx	h
+	mov	a, m		; byte3
+	aci	0
+	mov	m, a
+	; If carry out of byte3, the significand overflowed (became 0x01000000).
+	; This means implicit bit moved up, exponent increases by 1.
+	; For uint32 this can only happen for 0xFFFFFF80..0xFFFFFFFF (rare).
+	jnc	.Lfunsisf_pack
+	; Significand overflowed: [SP+0..3] = 0x01000000
+	; Right-shift by 1 to get 0x00800000, increment exponent
+	ora	a		; clear carry
+	rar
+	mov	m, a		; byte3
+	dcx	h
+	mov	a, m		; byte2
+	rar
+	mov	m, a
+	dcx	h
+	mov	a, m		; byte1
+	rar
+	mov	m, a
+	dcx	h
+	mov	a, m		; byte0
+	rar
+	mov	m, a
+	inr	d		; exponent += 1
 
 .Lfunsisf_pack:
 	; Significand in [SP+0..3], implicit bit at position 23.
@@ -752,9 +896,15 @@ __floatunsisf:
 	.globl	__floatsisf
 	.type	__floatsisf,@function
 __floatsisf:
+#ifdef UNDOC
+	ldsi	2
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 2
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Check if a == 0
 	mov	a, c
@@ -851,9 +1001,15 @@ __addsf3:
 	sphl			; SP -= 12
 
 	; Load a from [SP+14..17] (12 scratch + 2 ret addr)
+#ifdef UNDOC
+	ldsi	14
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 14
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Extract sign_a
 	mov	a, d
@@ -1290,9 +1446,15 @@ __addsf3:
 .Ladd_return_a:
 	; Return a (the larger operand) from scratch
 	; Reload a from original arg
+#ifdef UNDOC
+	ldsi	14
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 14
 	dad	sp
 	call	.Lload32
+#endif
 	; But we may have swapped, so we should pack from scratch instead
 	jmp	.Ladd_pack
 
@@ -1306,9 +1468,14 @@ __addsf3:
 
 .Ladd_overflow_inf:
 	; Return +/-Inf with sign_a
+#ifdef UNDOC
+	ldsi	8
+	ldax	d		; sign
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m		; sign
+#endif
 	ori	0x7F		; byte3 of Inf = sign | 0x7F
 	mov	d, a
 	mvi	e, 0x80		; byte2 of Inf = 0x80
@@ -1343,9 +1510,15 @@ __addsf3:
 
 .Ladd_b_is_zero:
 	; b is zero, return a
+#ifdef UNDOC
+	ldsi	14
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 14
 	dad	sp
 	call	.Lload32
+#endif
 	lxi	h, 12
 	dad	sp
 	sphl
@@ -1419,9 +1592,15 @@ __addsf3:
 
 .Ladd_b_special:
 	; exp_b == 0xFF, exp_a is normal: return b (Inf or NaN)
+#ifdef UNDOC
+	ldsi	18
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 18
 	dad	sp
 	call	.Lload32
+#endif
 	lxi	h, 12
 	dad	sp
 	sphl
@@ -1456,17 +1635,23 @@ __mulsf3:
 	sphl
 
 	; Load a from [SP+18..21]
+#ifdef UNDOC
+	ldsi	18
+	xchg
+	call	.Lload32		; C:B:E:D = a
+#else
 	lxi	h, 18
 	dad	sp
 	call	.Lload32	; C:B:E:D = a
+#endif
 
 	; Compute result sign = sign_a XOR sign_b
 	mov	a, d
 	ani	0x80
 	push	psw		; save sign_a temporarily
 	; Load b byte3 for sign_b
-	lxi	h, 25
-	dad	sp		; SP+23 originally, +2 for push = SP+25
+	lxi	h, 27
+	dad	sp		; b.byte3 at SP+25 before push, +2 for push = SP+27
 	mov	a, m		; b.byte3
 	ani	0x80
 	mov	h, a		; H = sign_b
@@ -1850,9 +2035,14 @@ __mulsf3:
 
 .Lmul_ret_zero:
 	; Return signed zero
+#ifdef UNDOC
+	ldsi	8
+	ldax	d		; result_sign
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m		; result_sign
+#endif
 	mov	d, a		; byte3 = sign
 	mvi	e, 0
 	lxi	b, 0
@@ -1863,9 +2053,14 @@ __mulsf3:
 
 .Lmul_overflow:
 	; Return signed infinity
+#ifdef UNDOC
+	ldsi	8
+	ldax	d		; result_sign
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m		; result_sign
+#endif
 	ori	0x7F		; byte3 of inf
 	mov	d, a
 	mvi	e, 0x80
@@ -1950,16 +2145,22 @@ __divsf3:
 	sphl
 
 	; Load a from [SP+18..21]
+#ifdef UNDOC
+	ldsi	18
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 18
 	dad	sp
 	call	.Lload32
+#endif
 
 	; Compute result sign
 	mov	a, d
 	ani	0x80
 	push	psw
-	lxi	h, 25
-	dad	sp		; b.byte3 (shifted by push)
+	lxi	h, 27
+	dad	sp		; b.byte3 at SP+25 before push, +2 for push = SP+27
 	mov	a, m
 	ani	0x80
 	mov	h, a
@@ -2352,9 +2553,14 @@ __divsf3:
 	ret
 
 .Ldiv_ret_zero:
+#ifdef UNDOC
+	ldsi	8
+	ldax	d
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m
+#endif
 	mov	d, a
 	mvi	e, 0
 	lxi	b, 0
@@ -2369,9 +2575,14 @@ __divsf3:
 	jmp	.Ldiv_overflow
 
 .Ldiv_overflow:
+#ifdef UNDOC
+	ldsi	8
+	ldax	d
+#else
 	lxi	h, 8
 	dad	sp
 	mov	a, m
+#endif
 	ori	0x7F
 	mov	d, a
 	mvi	e, 0x80
@@ -2384,9 +2595,15 @@ __divsf3:
 .Ldiv_a_special:
 	; a is Inf or NaN
 	; Load a mantissa to check NaN
+#ifdef UNDOC
+	ldsi	18
+	xchg
+	call	.Lload32
+#else
 	lxi	h, 18
 	dad	sp
 	call	.Lload32
+#endif
 	mov	a, e
 	ani	0x7F
 	ora	b
