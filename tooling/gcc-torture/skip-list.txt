@@ -52,11 +52,11 @@ pr23135         SIMD    vector types
 pr92618         SIMD    vector types (__m128i, fails at O1/O2)
 scal-to-vec2    SIMD    vector types (__attribute__((vector_size)))
 
-# --- Computed goto / label values (blockaddress codegen not supported) ---
-920302-1        PLATFORM    computed goto (&&label arithmetic, blockaddress bug)
-20040302-1      PLATFORM    computed goto (label value indexing, blockaddress bug)
-990208-1        PLATFORM    label address (&&here, blockaddress bug at -Os)
-pr70460         PLATFORM    computed goto (label difference table, blockaddress bug at -Os)
+# --- Computed goto / label values ---
+# 920302-1      PLATFORM    FIXED: computed goto (&&label arithmetic, blockaddress emission)
+# 20040302-1    PLATFORM    FIXED: computed goto (label value indexing, blockaddress emission)
+990208-1        PLATFORM    label address (&&here): clang inlines && to constant, bypasses codegen (WONTFIX)
+# pr70460       PLATFORM    FIXED: computed goto (label difference table, blockaddress emission)
 
 # --- INT16: malloc size overflow ---
 960521-1        INT16   BLOCK_SIZE*sizeof(int) = 32768*2 = 0 in 16-bit, malloc(0)
@@ -74,33 +74,32 @@ strncmp-1       TIMEOUT_OK  passes at 500M steps (string comparison stress test)
 pr91137         TIMEOUT_OK  passes at 100M steps (triple-nested 70^3 loop with i32 ops)
 
 # --- 64-bit arithmetic correctness bugs (i64 runtime or codegen) ---
-# These fail at O0 too: genuine i64 shift/rotate/arithmetic bugs
-20020226-1      I64_BUG 64-bit rotate (ROR/ROL on unsigned long long)
-20020508-1      I64_BUG 64-bit rotate (ROR/ROL on unsigned long long, variant)
+# 20020226-1      I64_BUG FIXED: dead draft code in __rotlhi2 corrupted carry chain
+# 20020508-1      I64_BUG FIXED: same __rotlhi2 fix as 20020226-1
 # 20041011-1      I64_BUG FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
 # 20090711-1      I64_BUG FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
-# bswap-1         I64_BUG __builtin_bswap64 result mismatch  # FIXED: BSWAP32 Defs + STORE_32 batch base-overlap
-builtin-bitops-1 I64_BUG __builtin_ffsll/clzll/ctzll/popcountll 64-bit bitops (fails at O0, runtime issue)
-ashrdi-1        I64_BUG 64-bit arithmetic right shift (overflows 64KB at O0)
-arith-rand-ll   I64_BUG 64-bit random arithmetic, exceeds any reasonable step limit
+# bswap-1         I64_BUG FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
+# builtin-bitops-1 I64_BUG FIXED: .Lpop8 in popcountsi2.S corrupted count register (ORA B -> ORA A)
+arith-rand-ll   TIMEOUT_OK  passes at Os with 500M steps (10000 iterations of 64-bit division)
+ashrdi-1        CODEGEN_OPT passes O1/O2/Oz, fails Os (64-bit ashr, overflows 64KB at O0)
 
 # --- 64-bit/long long optimizer bugs (pass at O0, fail at -Os) ---
 # longlong        CODEGEN_OPT FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
 # pr46316         CODEGEN_OPT FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
-pr57877         CODEGEN_OPT 64-bit comparison in loop optimized wrong at -Os
+# pr57877         CODEGEN_OPT FIXED: ZEXT8TO32/SEXT8TO32 H/L clobber in pseudo expansion
 # 20230802-1      CODEGEN_OPT FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
-20140622-1      CODEGEN_OPT unsigned wraparound in long cast optimized wrong at -Os
+# 20140622-1      CODEGEN_OPT FIXED: ZEXT16TO32/SEXT16TO32 HL-clobber in pseudo expansion
 # pr22141-1       CODEGEN_OPT FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
 
 # --- 32-bit long optimizer bugs (pass at O0, fail at -Os) ---
-20020615-1      CODEGEN_OPT 32-bit long arithmetic with conditional logic optimized wrong at -Os
+# 20020615-1      CODEGEN_OPT FIXED: STORE_32 Defs=[HL] caused MCP to remove needed COPY
 
 # --- printf-chk tests (requires stdio.h/vprintf, freestanding skip) ---
 printf-chk-1    GCC_EXT __printf_chk requires stdio.h/vprintf (dg-skip-if freestanding)
 vprintf-chk-1   GCC_EXT __vprintf_chk requires stdio.h/vprintf (dg-skip-if freestanding)
 
 # --- Packed struct with long long (64-bit unaligned access) ---
-20051113-1      CODEGEN_OPT packed struct with ULL, passes O0/Os but fails O1/O2
+# 20051113-1      CODEGEN_OPT FIXED: DAD-clobbers-carry in LOAD_32_WITH_ADDR pseudo expansion
 # pr79121         CODEGEN_OPT FIXED: BSWAP32 Defs + STORE_32 batch base-overlap fix
 
 # --- va_arg struct ABI bugs --- (FIXED: classifyArgumentType now passes aggregates by value)

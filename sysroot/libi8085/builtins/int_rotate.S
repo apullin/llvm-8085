@@ -42,37 +42,18 @@ __rotlhi2:
 	; Bit rotate left by A bits (1..7)
 	mov	e, a		; E = count
 .Lrotlhi_loop:
-	; Rotate BC left by 1: carry = MSB of B, shift B left through carry,
-	; shift C left with carry into LSB of C.
-	; C<<1 with carry from B's MSB entering C bit 0
-	mov	a, b
-	ral			; carry = old bit 7 of B
-	mov	a, c
-	ral			; C = C<<1 | old_carry(B bit7)
-	mov	c, a
-	mov	a, b
-	ral			; B = B<<1 | carry from C shift... no.
-
-	; Better: use ADD for 16-bit left rotate through carry.
-	; Step 1: save MSB of B into carry
-	; Step 2: C = C << 1 | carry; B = B << 1 | carry_from_C
-	; Actually for a rotate-left of BC:
-	; The MSB (bit 15 = bit 7 of B) should enter bit 0 of C.
-	; 1. Test bit 7 of B, save as future bit 0 of C
-	; 2. Shift C left, carry = old bit 7 of C
-	; 3. Shift B left, bring in carry from step 2
-
-	; Approach: use RAL for carry chain
-	; First, set carry = bit 7 of B (the bit that wraps around)
+	; Rotate BC left by 1 bit.
+	; Wrap bit = MSB of B (bit 15), enters LSB of C (bit 0).
+	; Step 1: set carry = bit 7 of B (the wrap-around bit)
 	mov	a, b
 	ral			; carry = bit7 of B
-	; Now shift C left through carry
+	; Step 2: shift C left through carry
 	mov	a, c
-	ral			; A = C<<1 | old_carry(wrap bit); carry = old bit7 of C
+	ral			; A = C<<1 | wrap_bit; carry = old bit7 of C
 	mov	c, a
-	; Shift B left through carry
+	; Step 3: shift B left through carry from C
 	mov	a, b
-	ral			; A = B<<1 | carry_from_C; carry = bit7 of B (already used)
+	ral			; A = B<<1 | carry_from_C
 	mov	b, a
 
 	dcr	e

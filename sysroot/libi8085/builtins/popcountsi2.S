@@ -13,59 +13,28 @@
 
 	.text
 
-; popcount8: count set bits in A. Returns count in A. Clobbers B.
-.Lpopcount8:
-	mov	b, a		; B = x
-	mvi	a, 0		; A = count
-	mov	c, b		; C = x (working copy)
-.Lpopcount8_loop:
-	mov	b, c		; B = x
-	ora	b		; test if B is zero (also clears carry... but we use ORA)
-	mov	a, b
-	ora	a
-	jz	.Lpopcount8_done_restore
-	; x &= (x - 1): clears lowest set bit
-	mov	a, c		; A = x
-	dcr	a		; A = x - 1
-	ana	c		; A = x & (x - 1)
-	mov	c, a		; C = new x
-	; Increment count (we need a separate counter)
-	; Let me restructure with D as counter
-	jmp	.Lpopcount8_loop
-.Lpopcount8_done_restore:
-	ret
-
-	; Better approach: use D as counter, A/B for Kernighan
+; pop8: count set bits in byte A. Returns count in A.
+; Clobbers B.
+; Uses Kernighan's trick: x &= (x-1) clears lowest set bit.
 .Lpop8:
-	; A = byte to count. Returns count in A.
-	; Clobbers B.
 	ora	a
-	jz	.Lpop8_zero
+	rz			; zero byte -> return 0
 	mov	b, a		; B = x
 	mvi	a, 0		; A = count
 .Lpop8_loop:
-	inr	a		; count++
-	mov	c, b		; save count... no, A is count
-	; x &= (x-1)
-	push	psw		; save count
-	mov	a, b
+	inr	a		; count++ (we know at least 1 bit is set)
+	; x &= (x-1): clear lowest set bit
+	push	psw		; save count on stack
+	mov	a, b		; A = x
 	dcr	a		; A = x - 1
 	ana	b		; A = x & (x - 1)
 	mov	b, a		; B = new x
+	ora	a		; test if x is now zero
+	jz	.Lpop8_done	; done -- count is still on stack
 	pop	psw		; restore count
-	ora	b		; test if x is zero... no this corrupts A
-	; Need a different approach
-	push	psw		; save count again
-	mov	a, b
-	ora	a
-	jz	.Lpop8_done
-	pop	psw
 	jmp	.Lpop8_loop
 .Lpop8_done:
 	pop	psw		; A = count
-	ret
-.Lpop8_zero:
-	; A is already 0
 	ret
 
 	.globl	__popcountsi2

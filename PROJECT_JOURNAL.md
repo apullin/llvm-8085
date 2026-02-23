@@ -493,5 +493,20 @@
 - Initial task mask: 0x0D (MSE=1, M7.5=masked, M6.5=unmasked for tick, M5.5=masked) — matches startup.S
 - Critical sections still use DI/EI (not SIM) for safety — all maskable interrupts blocked during kernel ops
 
+## 2026-02-23 FIX __rotlhi2 dead draft code + .Lpop8 count corruption
+
+**What**: Fixed 2 runtime bugs in hand-written assembly builtins that caused 3 GCC torture tests to fail. Recategorized 2 other tests (ashrdi-1 as CODEGEN_OPT, arith-rand-ll as TIMEOUT_OK).
+
+**Where**: `sysroot/libi8085/builtins/int_rotate.S` (.Lrotlhi_loop), `sysroot/libi8085/builtins/popcountsi2.S` (.Lpop8), `tooling/gcc-torture/skip-list.txt`
+
+**Why**: 5 i64-related GCC torture tests were in the skip list as I64_BUG. Investigation revealed 2 were genuine runtime bugs, 1 was an optimizer bug (-Os only), and 1 was a timeout issue (expected for 10000 iterations of 64-bit division on 8-bit CPU).
+
+**Technical notes**:
+- **int_rotate.S**: `.Lrotlhi_loop` had 7 dead instructions from a first draft that executed before the correct implementation, corrupting the carry chain for RAL rotates. The 64-bit rotate tests (20020226-1, 20020508-1) actually failed on the 16-bit rotate path, not the 64-bit one.
+- **popcountsi2.S**: `.Lpop8` used `ORA B` to test if x was zero, but this did `A = A | B`, destroying the popcount in A. `__builtin_popcountl(0xa5a5a5a5)` returned 160 instead of 16. Fix: test `ORA A` (on x in A) BEFORE `POP PSW` (count restore), branch to done if zero. POP PSW restores both A and flags — cannot test flags after it.
+- ashrdi-1: passes at O1/O2/Oz, fails at Os only — optimizer bug, not runtime
+- arith-rand-ll: passes at Os with 500M steps — timeout at O0 is expected
+- Verification: 384/384 rt_tests pass, fib benchmark HALTED at all opt levels, all 3 fixed tests pass at O0 and Os
+
 ---
-*Last Updated: 2026-02-16*
+*Last Updated: 2026-02-23*
