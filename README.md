@@ -70,6 +70,7 @@ llvm-8085/
 ├── llvm-project/               # LLVM 20 fork (submodule, branch: i8085)
 ├── rust-i8085/                 # Rust 1.88.0 fork (submodule, branch: i8085)
 ├── FreeRTOS-Kernel/            # FreeRTOS kernel (submodule, branch: i8085)
+├── gcc-torture-tests/          # GCC mirror (submodule, sparse checkout)
 ├── FreeRTOS/                   # FreeRTOS demos and port files
 ├── sysroot/
 │   ├── crt/                    # CRT0 startup code
@@ -254,6 +255,27 @@ Code sizes are `.text` section bytes. All cycle counts from [i8085-trace](https:
 ### LLVM Lit Tests
 
 101 tests (85 CodeGen + 16 MC), all passing.
+
+### GCC C Torture Tests
+
+The [GCC C torture test suite](https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=gcc/testsuite/gcc.c-torture/execute) validates compiler correctness across ~1300 standalone C programs. Results at `-Os`:
+
+- **1167/1167 compiled tests pass** (100%)
+- 90% compile rate (120 skip due to missing GCC extensions, nested functions, etc.)
+- Skip list covers expected platform differences: `sizeof(int)==2`, no `double`, no SIMD
+
+```bash
+# Run the full suite (~10 min)
+bash tooling/gcc-torture/run-torture.sh
+
+# Run a specific test
+bash tooling/gcc-torture/run-torture.sh --filter="pr22141-1.c"
+
+# Run at a different optimization level
+bash tooling/gcc-torture/run-torture.sh --opt=O0
+```
+
+The skip list with categorized platform differences is at `tooling/gcc-torture/skip-list.txt`.
 
 ## Backend Optimizations
 

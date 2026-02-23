@@ -10,3 +10,6 @@
 	path = rust-i8085
 	url = https://github.com/apullin/rust.git
 	branch = i8085
+[submodule "gcc-torture-tests"]
+	path = gcc-torture-tests
+	url = https://github.com/gcc-mirror/gcc.git
