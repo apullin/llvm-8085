@@ -70,18 +70,15 @@ llvm-8085/
 ├── llvm-project/               # LLVM 20 fork (submodule, branch: i8085)
 ├── rust-i8085/                 # Rust 1.88.0 fork (submodule, branch: i8085)
 ├── gcc-torture-tests/          # GCC mirror (submodule, sparse checkout)
+├── builtins/                   # Hand-written compiler support library (softfp, mul, div, memops)
+├── picolibc-i8085/             # Picolibc cross-compilation build config
 ├── FreeRTOS/
 │   ├── FreeRTOS-Kernel/        # FreeRTOS kernel (submodule, branch: i8085)
 │   └── demos/                  # Demo programs (basic, queue, heap, eventgroup, mutex)
-├── sysroot/
-│   ├── crt/                    # CRT0 startup code
-│   ├── ldscripts/              # Linker scripts (32K, 48K, 64K layouts)
-│   ├── include/                # Headers (picolibc + libc++)
-│   ├── lib/                    # Libraries (libgcc.a, libc.a)
-│   └── libi8085/builtins/      # Hand-written runtime assembly
+├── sysroot/                    # Installed SDK (headers, libraries, CRT, linker scripts)
 ├── tooling/
 │   └── examples/               # 15 benchmarks + C++/Rust/serde tests
-├── docs/                       # ABI, status, runtime library docs
+├── docs/                       # Reference manuals, ABI documentation
 └── PROJECT_JOURNAL.md          # Detailed development log
 ```
 
@@ -180,7 +177,7 @@ Full DWARF debug info works with the `-g` flag. Supports breakpoints, single-ste
 
 ## Runtime Libraries
 
-### Compiler Builtins (`sysroot/libi8085/builtins/`)
+### Compiler Builtins (`builtins/`)
 
 Hand-coded 8085 assembly for all performance-critical operations:
 

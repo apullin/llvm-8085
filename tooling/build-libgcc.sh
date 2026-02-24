@@ -18,8 +18,7 @@ LLC="${TOOLBIN}/llc"
 AR="${TOOLBIN}/llvm-ar"
 
 BUILTINS_DIR="${ROOT}/llvm-project/compiler-rt/lib/builtins"
-LIBI8085_DIR="${SYSROOT}/libi8085"
-LIBI8085_BUILTINS_DIR="${LIBI8085_DIR}/builtins"
+LIBI8085_BUILTINS_DIR="${ROOT}/builtins"
 OUT_DIR="${SYSROOT}/lib/builtins"
 
 # Extra flags for undocumented instruction support
@@ -69,7 +68,7 @@ for base in "${float_sources_o0[@]}"; do
     exit 1
   fi
   "${CLANG}" -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin \
-    -nostdlib -I "${LIBI8085_DIR}/include" -I "${BUILTINS_DIR}" \
+    -nostdlib -I "${LIBI8085_BUILTINS_DIR}" -I "${BUILTINS_DIR}" \
     -emit-llvm -c "${src}" -o "${tmpdir}/${base}.bc"
   "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
     "${tmpdir}/${base}.bc" -o "${OUT_DIR}/${base}.o"
@@ -82,7 +81,7 @@ for base in "${float_sources_o0_softfp[@]}"; do
     exit 1
   fi
   "${CLANG}" -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin \
-    -D__SOFTFP__ -nostdlib -I "${LIBI8085_DIR}/include" -I "${BUILTINS_DIR}" \
+    -D__SOFTFP__ -nostdlib -I "${LIBI8085_BUILTINS_DIR}" -I "${BUILTINS_DIR}" \
     -emit-llvm -c "${src}" -o "${tmpdir}/${base}.bc"
   "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
     "${tmpdir}/${base}.bc" -o "${OUT_DIR}/${base}.o"
@@ -95,7 +94,7 @@ for base in "${float_sources_o1[@]}"; do
     exit 1
   fi
   "${CLANG}" -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin \
-    -nostdlib -I "${LIBI8085_DIR}/include" -I "${BUILTINS_DIR}" \
+    -nostdlib -I "${LIBI8085_BUILTINS_DIR}" -I "${BUILTINS_DIR}" \
     -emit-llvm -c "${src}" -o "${tmpdir}/${base}.bc"
   "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
     "${tmpdir}/${base}.bc" -o "${OUT_DIR}/${base}.o"
@@ -108,7 +107,7 @@ for base in "${float_sources_os[@]}"; do
     exit 1
   fi
   "${CLANG}" -target i8085-unknown-elf -Os -ffreestanding -fno-builtin \
-    -nostdlib -I "${LIBI8085_DIR}/include" -I "${BUILTINS_DIR}" \
+    -nostdlib -I "${LIBI8085_BUILTINS_DIR}" -I "${BUILTINS_DIR}" \
     -emit-llvm -c "${src}" -o "${tmpdir}/${base}.bc"
   "${LLC}" -mtriple=i8085-unknown-elf -filetype=obj \
     "${tmpdir}/${base}.bc" -o "${OUT_DIR}/${base}.o"

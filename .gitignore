@@ -1,12 +1,16 @@
 .DS_Store
 
-# LLVM forks live as separate repos/submodules
-# llvm-project/ is now a proper submodule
-8085-llvm/
+# Build artifacts
+**/build*/
+sysroot/lib/builtins/
+tooling/smoke-build/
+
+# Picolibc cross-compilation build tree (track config, ignore checkout + build)
+picolibc-i8085/third_party/
+picolibc-i8085/build/
+
+# Simulator (separate repo)
 i8085-trace/
 
-# Local build artifacts
-/tooling/build/
-/tooling/smoke-build/
-/sim/candidates/
-/libi8085/build/
+# Claude Code local state
+.claude/
