@@ -1,0 +1,39 @@
+{
+  "llvm-target": "i8085-unknown-unknown",
+  "data-layout": "e-p:16:8-i8:8-i16:8-i32:8-i64:8-f32:8-f64:8-n8-a:8",
+  "arch": "i8085",
+  "target-endian": "little",
+  "target-pointer-width": "16",
+  "target-c-int-width": "16",
+  "os": "none",
+  "linker-flavor": "gcc",
+  "linker": "/Users/andrewpullin/personal/llvm-8085/llvm-project/build-clang-8085/bin/clang",
+  "executables": true,
+  "panic-strategy": "abort",
+  "disable-redzone": true,
+  "features": "",
+  "max-atomic-width": 0,
+  "atomic-cas": false,
+  "has-thread-local": false,
+  "singlethread": true,
+  "no-default-libraries": true,
+  "eh-frame-header": false,
+  "emit-debug-gdb-scripts": false,
+  "pre-link-args": {
+    "gcc": [
+      "-target", "i8085-unknown-unknown",
+      "-nostdlib",
+      "-ffreestanding",
+      "-Wl,-T,/Users/andrewpullin/personal/llvm-8085/sysroot/ldscripts/i8085-32kram-32krom.ld",
+      "-Wl,--gc-sections",
+      "/Users/andrewpullin/personal/llvm-8085/tooling/examples/rust_test/crt0.o"
+    ]
+  },
+  "post-link-args": {
+    "gcc": [
+      "/Users/andrewpullin/personal/llvm-8085/sysroot/lib/libgcc.a",
+      "/Users/andrewpullin/personal/llvm-8085/sysroot/lib/libc.a",
+      "/Users/andrewpullin/personal/llvm-8085/sysroot/lib/libgcc.a"
+    ]
+  }
+}

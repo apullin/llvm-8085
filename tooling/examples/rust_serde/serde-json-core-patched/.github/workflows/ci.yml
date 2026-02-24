@@ -1,0 +1,62 @@
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+name: Continuous integration
+
+env:
+  RUSTFLAGS: '--deny warnings'
+
+jobs:
+  ci-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # All generated code should be running on stable now
+        rust: [stable]
+
+        # The default target we're compiling on and for
+        TARGET: [x86_64-unknown-linux-gnu, thumbv6m-none-eabi, thumbv7m-none-eabi]
+
+        include:
+          # Test MSRV
+          - rust: 1.65.0  # keep in sync with manifest rust-version
+            TARGET: x86_64-unknown-linux-gnu
+
+          # Test nightly but don't fail
+          - rust: nightly
+            experimental: true
+            TARGET: x86_64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.TARGET }}
+
+      - run: cargo build --target=${{ matrix.TARGET }}
+
+      - run: cargo test --target=${{ matrix.TARGET }} --all-features
+        if: ${{ contains(matrix.TARGET, 'x86_64') }}
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - run: cargo clippy
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all -- --check

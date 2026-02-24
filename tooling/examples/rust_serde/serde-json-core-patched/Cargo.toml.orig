@@ -1,0 +1,43 @@
+[package]
+authors = ["Jorge Aparicio <jorge@japaric.io>",
+           "Ryan Summers <ryan.summers@vertigo-designs.com>",
+           "Robert Jördens <rj@quartiq.de>",
+           "Mathias Koch <mk@factbird.com>"
+]
+categories = ["no-std"]
+description = "serde-json for no_std programs"
+documentation = "https://docs.rs/serde-json-core"
+edition = "2018"
+rust-version = "1.65.0"  # keep in sync with ci, src/lib.rs, and README
+keywords = ["serde", "json"]
+license = "MIT OR Apache-2.0"
+name = "serde-json-core"
+readme = "README.md"
+repository = "https://github.com/rust-embedded-community/serde-json-core"
+version = "0.6.0"
+
+[dependencies]
+ryu = "1.0.5"
+
+[dependencies.heapless]
+version = "0.8"
+features = ["serde"]
+optional = true
+
+[dependencies.serde]
+default-features = false
+features = ["derive"]
+version = "1.0.100"
+
+[dependencies.defmt]
+version = "0.3"
+optional = true
+
+[dev-dependencies]
+serde_derive = "1.0.100"
+
+[features]
+default = ["heapless"]
+custom-error-messages = ["heapless"]
+std = ["serde/std"]
+defmt = ["dep:defmt", "heapless?/defmt-03"]

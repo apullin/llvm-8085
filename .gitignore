@@ -2,6 +2,7 @@
 
 # Build artifacts
 **/build*/
+**/target/
 sysroot/lib/builtins/
 tooling/smoke-build/
 
