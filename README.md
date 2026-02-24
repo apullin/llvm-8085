@@ -69,9 +69,10 @@ i8085-trace -S -n 1000000 -d 0x0200:16 program.bin
 llvm-8085/
 ├── llvm-project/               # LLVM 20 fork (submodule, branch: i8085)
 ├── rust-i8085/                 # Rust 1.88.0 fork (submodule, branch: i8085)
-├── FreeRTOS-Kernel/            # FreeRTOS kernel (submodule, branch: i8085)
 ├── gcc-torture-tests/          # GCC mirror (submodule, sparse checkout)
-├── FreeRTOS/                   # FreeRTOS demos and port files
+├── FreeRTOS/
+│   ├── FreeRTOS-Kernel/        # FreeRTOS kernel (submodule, branch: i8085)
+│   └── demos/                  # Demo programs (basic, queue, heap, eventgroup, mutex)
 ├── sysroot/
 │   ├── crt/                    # CRT0 startup code
 │   ├── ldscripts/              # Linker scripts (32K, 48K, 64K layouts)
@@ -140,23 +141,21 @@ See `tooling/examples/rust_test/` for a basic arithmetic/control-flow test and `
 
 ## FreeRTOS
 
-The `FreeRTOS/` directory contains a full FreeRTOS port for the Intel 8085.
+The `FreeRTOS/` directory contains a full FreeRTOS port for the Intel 8085 with per-task interrupt mask save/restore via SIM/RIM.
 
-### Demo programs
-
-**Basic** (`demo_basic.c`): Two equal-priority tasks increment separate counters under preemptive time-slicing. Verifies scheduler alternation.
-
-**Queue** (`demo_queue.c`): Producer/consumer pattern with `xQueueSend`/`xQueueReceive`, event groups, and tick-based delays.
-
-**Heap** (`demo_heap.c`): Dynamic allocation stress test using `heap_4`. Exercises `pvPortMalloc`/`vPortFree`, block coalescing, and dynamic task/queue create+delete.
+**Basic** (`demo_basic.c`): Two equal-priority tasks under preemptive time-slicing.
+**Queue** (`demo_queue.c`): Producer/consumer with `xQueueSend`/`xQueueReceive`.
+**Heap** (`demo_heap.c`): Dynamic allocation stress test with `heap_4`.
+**Event Group** (`demo_eventgroup.c`): Inter-task synchronization via event bits.
+**Mutex** (`demo_mutex.c`): Priority inheritance mutex with counter protection.
 
 ```bash
-cd FreeRTOS && make run          # basic two-task test
-cd FreeRTOS && make run-queue    # producer/consumer
-cd FreeRTOS && make run-heap     # heap stress test
+cd FreeRTOS/demos && make run          # basic two-task test
+cd FreeRTOS/demos && make run-queue    # producer/consumer
+cd FreeRTOS/demos && make run-heap     # heap stress test
 ```
 
-Timer interrupt: `i8085-trace --timer=65:30720` (RST 6.5 at 100 Hz for 3.072 MHz clock).
+Timer interrupt: RST 6.5 at 100 Hz (`--timer=65:30720`, 3.072 MHz clock).
 
 ## Debugging and Emulation
 

@@ -4,7 +4,7 @@
 # Clean:  make clean
 # Test:   make run                (basic two-task test)
 
-ROOT      := $(shell cd .. && pwd)
+ROOT      := $(shell cd ../.. && pwd)
 LLVM_BIN  := $(ROOT)/llvm-project/build-clang-8085/bin
 CC        := $(LLVM_BIN)/clang
 AS        := $(CC)
@@ -23,8 +23,8 @@ CFLAGS    := $(TARGET) $(OPT) -ffreestanding -fno-builtin -nostdlib \
              -isystem $(CLANG_RES) \
              -isystem $(SYSROOT)/include \
              -I . \
-             -I $(ROOT)/FreeRTOS-Kernel/include \
-             -I $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085
+             -I $(ROOT)/FreeRTOS/FreeRTOS-Kernel/include \
+             -I $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085
 ASFLAGS   := $(TARGET) -c
 LDFLAGS   := -m i8085elf -T linker.ld --gc-sections
 
@@ -35,24 +35,24 @@ BUILDDIR  := build
 
 # FreeRTOS kernel sources (minimal set)
 KERNEL_SRC := \
-    $(ROOT)/FreeRTOS-Kernel/tasks.c \
-    $(ROOT)/FreeRTOS-Kernel/list.c \
-    $(ROOT)/FreeRTOS-Kernel/queue.c
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/tasks.c \
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/list.c \
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/queue.c
 
 # Heap allocator (heap_4 = coalescing malloc/free)
 HEAP_SRC := \
-    $(ROOT)/FreeRTOS-Kernel/portable/MemMang/heap_4.c
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/MemMang/heap_4.c
 
 # Event groups
 EVENT_SRC := \
-    $(ROOT)/FreeRTOS-Kernel/event_groups.c
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/event_groups.c
 
 # Port sources
 PORT_SRC := \
-    $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/port.c
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/port.c
 
 PORT_ASM := \
-    $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/portasm.S
+    $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/portasm.S
 
 # Startup
 STARTUP_SRC := \
@@ -65,11 +65,11 @@ DEMO_BASIC_MAP  := $(BUILDDIR)/freertos_basic.map
 DEMO_BASIC_LIST := $(BUILDDIR)/freertos_basic.list
 
 # Object files
-KERNEL_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(KERNEL_SRC))
-HEAP_OBJS       := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/MemMang/%.c,$(BUILDDIR)/heap/%.o,$(HEAP_SRC))
-EVENT_OBJS      := $(patsubst $(ROOT)/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(EVENT_SRC))
-PORT_C_OBJS     := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.c,$(BUILDDIR)/port/%.o,$(PORT_SRC))
-PORT_ASM_OBJS   := $(patsubst $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.S,$(BUILDDIR)/port/%.o,$(PORT_ASM))
+KERNEL_OBJS     := $(patsubst $(ROOT)/FreeRTOS/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(KERNEL_SRC))
+HEAP_OBJS       := $(patsubst $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/MemMang/%.c,$(BUILDDIR)/heap/%.o,$(HEAP_SRC))
+EVENT_OBJS      := $(patsubst $(ROOT)/FreeRTOS/FreeRTOS-Kernel/%.c,$(BUILDDIR)/kernel/%.o,$(EVENT_SRC))
+PORT_C_OBJS     := $(patsubst $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/%.c,$(BUILDDIR)/port/%.o,$(PORT_SRC))
+PORT_ASM_OBJS   := $(patsubst $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/%.S,$(BUILDDIR)/port/%.o,$(PORT_ASM))
 STARTUP_OBJS    := $(patsubst %.S,$(BUILDDIR)/%.o,$(STARTUP_SRC))
 DEMO_BASIC_OBJ  := $(BUILDDIR)/demo_basic.o
 
@@ -137,22 +137,22 @@ $(DEMO_BASIC_ELF): $(ALL_BASIC_OBJS) linker.ld
 	    -o $@
 
 # Compile heap allocator
-$(BUILDDIR)/heap/%.o: $(ROOT)/FreeRTOS-Kernel/portable/MemMang/%.c
+$(BUILDDIR)/heap/%.o: $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/MemMang/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile FreeRTOS kernel C sources (tasks.c, list.c, queue.c)
-$(BUILDDIR)/kernel/%.o: $(ROOT)/FreeRTOS-Kernel/%.c
+$(BUILDDIR)/kernel/%.o: $(ROOT)/FreeRTOS/FreeRTOS-Kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile port C sources
-$(BUILDDIR)/port/%.o: $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.c
+$(BUILDDIR)/port/%.o: $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Assemble port assembly
-$(BUILDDIR)/port/%.o: $(ROOT)/FreeRTOS-Kernel/portable/GCC/I8085/%.S
+$(BUILDDIR)/port/%.o: $(ROOT)/FreeRTOS/FreeRTOS-Kernel/portable/GCC/I8085/%.S
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
