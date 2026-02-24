@@ -1,26 +1,32 @@
 # LLVM Backend for Intel 8085
 
-A production-quality LLVM backend for the [Intel 8085](https://en.wikipedia.org/wiki/Intel_8085) — the 8-bit microprocessor whose instruction set is the direct ancestor of the x86 architecture that runs most of the world's computers today. This project brings a modern optimizing compiler back to where it all started. Compiles C, C++ (with STL), and Rust 🦀 to native 8085 machine code.
+A production-quality LLVM backend for the [Intel 8085](https://en.wikipedia.org/wiki/Intel_8085) — the 8-bit microprocessor whose instruction set is the direct ancestor of the x86 architecture. This project brings a modern optimizing compiler back to where it all started. Compiles C, C++ (with STL), and Rust to native 8085 machine code.
+
+This project started from [MannarAmuthan's 8085-llvm](https://github.com/MannarAmuthan/8085-llvm), which provided the initial backend scaffolding and instruction definitions.
 
 ## Highlights
 
 - **Full LLVM 20 toolchain** — clang, opt, lld, llvm-objcopy, assembler, and disassembler. No external tools required.
-- **Heavily stress-tested** — 15 benchmarks (75/75 pass across -O0, -O1, -O2, -Os, -Oz), Csmith random programs, MiniLZO compression, picolibc sprintf suite.
-- **C++ with STL** — freestanding C++20 with a large, verified subset of libc++ containers, utilities, and algorithms. See [C++ with STL](#c-with-stl).
-- **Rust `#![no_std]`** 🦀 — cross-compilation via a custom Rust build linked against our LLVM fork. See [Rust Support](#rust-support).
-- **FreeRTOS port** — preemptive multitasking with three verified demos: basic task switching, producer/consumer queues, and dynamic heap allocation with `heap_4`. See [FreeRTOS](#freertos).
+- **Heavily stress-tested** — 15 benchmarks (75/75 pass across -O0 through -Oz), 1167/1167 GCC C torture tests, Csmith random programs, MiniLZO compression, picolibc sprintf suite.
+- **C++ with STL** — freestanding C++20 with libc++ containers (`vector`, `string`, `sort`, `optional`, `unique_ptr`, ...). Lambdas, multiple inheritance, move semantics, variadic templates all working.
+- **Rust `#![no_std]`** — cross-compilation via a custom Rust 1.88.0 build. Serde JSON serialization/deserialization in 11.5KB.
+- **FreeRTOS port** — preemptive multitasking with five verified demos and per-task interrupt mask save/restore via SIM/RIM.
 - **Hand-tuned runtime library** — 2,598 bytes of assembly-optimized IEEE 754 soft-float (24/24 correctness tests), 32/64-bit multiply/divide/shift, `memcpy`/`memset`/`memmove`/`memchr`, and string operations.
 - **GDB/LLDB debugging** — the [i8085-trace](https://github.com/apullin/i8085-trace) emulator includes a GDB Remote Serial Protocol stub. Full DWARF support with `-g`.
 
 ## The CPU
 
-The [Intel 8085](https://en.wikipedia.org/wiki/Intel_8085) (1976) was the last and most refined member of Intel's 8-bit processor family. It has seven 8-bit registers (A, B, C, D, E, H, L) that can be used as three 16-bit pairs (BC, DE, HL), a 16-bit stack pointer and program counter, and a flag register with sign, zero, auxiliary carry, parity, and carry bits.
+The [Intel 8085](https://en.wikipedia.org/wiki/Intel_8085) (1976) was the last member of Intel's 8-bit processor family. Seven 8-bit registers (A, B, C, D, E, H, L) that pair into three 16-bit pairs (BC, DE, HL), a 16-bit stack pointer, and flags for sign, zero, auxiliary carry, parity, and carry.
 
-What it *doesn't* have is almost more interesting from a compiler perspective: no multiply or divide instructions, no indexed addressing modes, no barrel shifter, and only one register (HL) that can address memory. Every stack variable access requires a 3-instruction sequence (`LXI H, offset; DAD SP; MOV r, M`). This makes the 8085 one of the most challenging targets for a modern optimizing compiler — and one of the most rewarding when it works.
+What it *doesn't* have makes it one of the most challenging compiler targets imaginable: no multiply or divide, no indexed addressing, no barrel shifter, and only one register pair (HL) that can address memory. Every stack variable access requires a 3-instruction sequence (`LXI H, offset; DAD SP; MOV r, M`). The register file is tiny, every 32-bit operation is a multi-instruction dance, and there are only 246 opcodes to work with.
 
-The 8085's instruction set evolved into the 8086 (1978), which became the x86 architecture. The register names, flags, stack model, and little-endian byte order are a direct inheritance. Writing an LLVM backend for the 8085 is, in a sense, going back to the roots of the most commercially successful processor architecture in history.
+The 8085's instruction set evolved into the 8086 (1978), which became x86. The register names, flags, stack model, and little-endian byte order are a direct inheritance. For full details, see the [MCS-80/85 Family User's Manual](https://archive.org/details/Intel8085) (Intel, 1977).
 
-For full details, see the [MCS-80/85 Family User's Manual](https://archive.org/details/Intel8085) (Intel, 1977).
+### 8080 Compatibility
+
+While this project targets the 8085, all generated code uses the base 8080 instruction set and is fully compatible with the Intel 8080 and any 8080-derivative CPU. The optional undocumented 8085 instructions (`+undoc` feature flag) are the only 8085-specific feature. The FreeRTOS kernel includes both an 8085 port (with SIM/RIM interrupt masking) and an 8080 port (DI/EI only).
+
+(If you have an [Altair 8800](https://en.wikipedia.org/wiki/Altair_8800), an [IMSAI 8080](https://en.wikipedia.org/wiki/IMSAI_8080), a [Poly-88](https://en.wikipedia.org/wiki/Poly-88), or any other 8080-based machine — I'd love to hear about someone running Rust on real vintage hardware!)
 
 ## Quick Start
 
@@ -82,16 +88,6 @@ llvm-8085/
 └── PROJECT_JOURNAL.md          # Detailed development log
 ```
 
-## Toolchain
-
-The backend produces ELF object files directly — no external assembler needed:
-
-```
- .c / .S  ──▶  clang -c  ──▶  .o (ELF)  ──▶  ld.lld  ──▶  llvm-objcopy  ──▶  .bin
-```
-
-All standard LLVM tools work: `opt` for IR optimization, `llc` for code generation, `llvm-objdump` for disassembly, `llvm-size` for section sizes.
-
 ## Language Support
 
 ### C
@@ -100,7 +96,7 @@ Full C11 support in freestanding mode. All integer sizes through 64-bit, IEEE 75
 
 ### C++ with STL
 
-Freestanding C++ with header-only libc++ from the LLVM tree:
+Freestanding C++20 with header-only libc++ from the LLVM tree:
 
 ```bash
 clang --target=i8085-unknown-elf -O2 -ffreestanding -fno-builtin \
@@ -111,7 +107,7 @@ clang --target=i8085-unknown-elf -O2 -ffreestanding -fno-builtin \
 
 **Working STL containers and utilities**: `vector`, `string`, `pair`, `tuple`, `optional`, `string_view`, `unique_ptr`, `initializer_list`, `bitset`, `numeric_limits`, `array`, and algorithms (`find`, `count`, `reverse`, `min`, `max`, `sort`).
 
-**Working language features**: lambdas (value, reference, mutable, as template arguments), multiple inheritance with virtual dispatch and pointer adjustment, move semantics (construct + assign), variadic templates, structured bindings (pair, tuple, struct), deep virtual inheritance chains, type-erased callables (manual `std::function`), lambda comparators.
+**Working language features**: lambdas (all capture modes), multiple inheritance with virtual dispatch, move semantics, variadic templates, structured bindings, deep virtual inheritance chains, type-erased callables, lambda comparators.
 
 A minimal C++ runtime provides `operator new`/`delete` (wrapping `malloc`/`free`), `__cxa_pure_virtual`, `__cxa_atexit`, and `__dso_handle`. Global constructors run via `.init_array` iteration in CRT0.
 
@@ -132,19 +128,25 @@ CARGO_FEATURE_NO_F16_F128=1 cargo +i8085 build \
   -Z build-std=core --target i8085-unknown-none.json
 ```
 
-See `tooling/examples/rust_test/` for a basic arithmetic/control-flow test and `tooling/examples/rust_serde/` for a serde-json serialization/deserialization demo.
-
-**Serde JSON on an 8085**: The `rust_serde` example serializes and deserializes `Point{x: i16, y: i16, z: i16}` to/from JSON using `serde` + `serde-json-core`. Produces `{"x":42,"y":-7,"z":300}`, round-trips correctly, 11.5KB release binary with LTO.
+See `tooling/examples/rust_test/` for a basic arithmetic/control-flow test and `tooling/examples/rust_serde/` for a serde-json serialization/deserialization demo (11.5KB binary with LTO).
 
 ## FreeRTOS
 
-The `FreeRTOS/` directory contains a full FreeRTOS port for the Intel 8085 with per-task interrupt mask save/restore via SIM/RIM.
+The `FreeRTOS/` directory contains a full FreeRTOS port for the Intel 8085.
 
-**Basic** (`demo_basic.c`): Two equal-priority tasks under preemptive time-slicing.
-**Queue** (`demo_queue.c`): Producer/consumer with `xQueueSend`/`xQueueReceive`.
-**Heap** (`demo_heap.c`): Dynamic allocation stress test with `heap_4`.
-**Event Group** (`demo_eventgroup.c`): Inter-task synchronization via event bits.
-**Mutex** (`demo_mutex.c`): Priority inheritance mutex with counter protection.
+### Why FreeRTOS on the 8085
+
+The 8085's interrupt architecture — three maskable priority levels (RST 5.5, 6.5, 7.5) individually controllable via the SIM instruction, plus a non-maskable TRAP — makes it a natural fit for a preemptive RTOS. The port saves and restores per-task interrupt masks during context switches, so each task can independently control which interrupts it allows.
+
+### Demo programs
+
+| Demo | Description |
+|------|-------------|
+| **basic** | Two equal-priority tasks under preemptive time-slicing |
+| **queue** | Producer/consumer with `xQueueSend`/`xQueueReceive` |
+| **heap** | Dynamic allocation stress test with `heap_4` |
+| **eventgroup** | Inter-task synchronization via event bits |
+| **mutex** | Priority inheritance mutex with counter protection |
 
 ```bash
 cd FreeRTOS/demos && make run          # basic two-task test
@@ -194,7 +196,7 @@ Hand-coded 8085 assembly for all performance-critical operations:
 
 ### C library
 
-[picolibc](https://github.com/picolibc/picolibc) built for i8085 at `-Oz`, providing `printf`, `sprintf`, `strtol`, `qsort`, and other standard C library functions.
+[picolibc](https://github.com/picolibc/picolibc) cross-compiled for i8085 at `-Oz`, providing `printf`, `sprintf`, `strtol`, `qsort`, and other standard C library functions. Build configuration in `picolibc-i8085/`.
 
 ## Calling Convention
 
@@ -216,7 +218,7 @@ Aggregates larger than 4 bytes are returned via hidden `sret` pointer. `byval` a
 
 ### Benchmark Suite
 
-15 programs, all passing at every optimization level (75/75 HALTED):
+15 programs, all passing at every optimization level (75/75):
 
 | Benchmark | Description | -O0 | -O1 | -O2 | -Os |
 |-----------|-------------|----:|----:|----:|----:|
@@ -236,7 +238,7 @@ Aggregates larger than 4 bytes are returned via hidden `sret` pointer. `byval` a
 | arith64_torture | 64-bit arithmetic | 15,671 | 13,215 | 13,215 | 13,191 |
 | div_torture | 16/32/64-bit division | 30,476 | 17,979 | 17,979 | 17,775 |
 
-Code sizes are `.text` section bytes. All cycle counts from [i8085-trace](https://github.com/apullin/i8085-trace) emulator.
+Code sizes are `.text` section bytes. All execution on the [i8085-trace](https://github.com/apullin/i8085-trace) emulator.
 
 ### Stress Tests
 
@@ -248,10 +250,6 @@ Code sizes are `.text` section bytes. All cycle counts from [i8085-trace](https:
 | **C++ stress test** (40 bytes) | O0-Os | Lambdas, MI, move, variadic, structured bindings, vtables, type erasure |
 | **STL test** (33 bytes) | O0-Os | vector, string, pair, tuple, optional, sort, bitset, unique_ptr |
 
-### LLVM Lit Tests
-
-101 tests (85 CodeGen + 16 MC), all passing.
-
 ### GCC C Torture Tests
 
 The [GCC C torture test suite](https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=gcc/testsuite/gcc.c-torture/execute) validates compiler correctness across ~1300 standalone C programs. Results at `-Os`:
@@ -261,17 +259,14 @@ The [GCC C torture test suite](https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=gcc/t
 - Skip list covers expected platform differences: `sizeof(int)==2`, no `double`, no SIMD
 
 ```bash
-# Run the full suite (~10 min)
-bash tooling/gcc-torture/run-torture.sh
-
-# Run a specific test
-bash tooling/gcc-torture/run-torture.sh --filter="pr22141-1.c"
-
-# Run at a different optimization level
-bash tooling/gcc-torture/run-torture.sh --opt=O0
+bash tooling/gcc-torture/run-torture.sh              # full suite (~10 min)
+bash tooling/gcc-torture/run-torture.sh --opt=O0     # specific optimization level
+bash tooling/gcc-torture/run-torture.sh --filter="pr22141-1.c"   # specific test
 ```
 
-The skip list with categorized platform differences is at `tooling/gcc-torture/skip-list.txt`.
+### LLVM Lit Tests
+
+101 tests (85 CodeGen + 16 MC), all passing.
 
 ## Backend Optimizations
 
@@ -281,15 +276,21 @@ The 8085's lack of indexed addressing means every stack access is 5 bytes (`LXI 
 - **32-bit load/store coalescing** — batches register loads into `B/C/D/E` when destination registers are dead
 - **Cross-operation forwarding** — skips redundant store/load between consecutive 32-bit operations
 - **Byte-shuffle shifts** — constant shifts by 8/16/24 use register moves instead of shift loops
-- **Inline threshold tuning** — `-Os` uses threshold=0 to prevent code-expanding inlines (1937B vs 3445B on PID benchmark)
+- **Inline threshold tuning** — `-Os` uses threshold=0 to prevent code-expanding inlines
 - **PSW-preserving pseudo expansion** — detects live flags across pseudo instruction expansion to prevent `DAD` from clobbering carry
+
+## Future Work
+
+- **Undocumented instruction support** — the 8085 has [undocumented instructions](http://www.righto.com/2013/02/looking-at-silicon-to-understanding.html) (DSUB, ARHL, RDEL, LDSI, SHLX, LHLX) that can reduce code size by 1-5%. Backend support is implemented on the `undoc` branch with `+undoc` feature flag.
+- **CoreMark** — port and benchmark.
+- **Upstream LLVM** — the backend currently lives on a fork. Contributing it upstream would make it available to all LLVM users.
 
 ## Resources
 
 - [MCS-80/85 Family User's Manual](https://archive.org/details/Intel8085) (Intel, 1977)
 - [i8085-trace](https://github.com/apullin/i8085-trace) — Intel 8085 CPU emulator with GDB stub
 - [docs/ABI.md](docs/ABI.md) — Calling convention and ABI documentation
-- [docs/STATUS.md](docs/STATUS.md) — Project status and checklist
+- [STATUS.md](STATUS.md) — Project status checklist
 - [PROJECT_JOURNAL.md](PROJECT_JOURNAL.md) — Detailed development log
 
 ## License
