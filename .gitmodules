@@ -13,3 +13,6 @@
 [submodule "gcc-torture-tests"]
 	path = gcc-torture-tests
 	url = https://github.com/gcc-mirror/gcc.git
+[submodule "picolibc-i8085/picolibc-src"]
+	path = picolibc-i8085/picolibc-src
+	url = https://github.com/picolibc/picolibc
