@@ -22,7 +22,7 @@
 ; For left shift, byte shuffle moves bytes toward higher addresses
 ; (toward MSB), and bit shift uses ADD/ADC carry chain.
 ; ===================================================================
-	.text
+	.section .text.__ashldi3, "ax", @progbits
 	.globl	__ashldi3
 	.type	__ashldi3,@function
 __ashldi3:
@@ -309,6 +309,7 @@ __ashldi3:
 ; (toward LSB), and bit shift uses carry chain from MSB to LSB.
 ; Zeros are shifted in at the MSB side.
 ; ===================================================================
+	.section .text.__lshrdi3, "ax", @progbits
 	.globl	__lshrdi3
 	.type	__lshrdi3,@function
 __lshrdi3:
@@ -530,6 +531,7 @@ __lshrdi3:
 ; Byte shuffle fills with 0x00 or 0xFF depending on sign.
 ; Bit shift uses arithmetic right shift on the MSB byte.
 ; ===================================================================
+	.section .text.__ashrdi3, "ax", @progbits
 	.globl	__ashrdi3
 	.type	__ashrdi3,@function
 __ashrdi3:

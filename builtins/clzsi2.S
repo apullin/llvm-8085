@@ -1,7 +1,7 @@
 // Minimal i8085 __clzsi2 in assembly to avoid codegen pitfalls.
 // Returns the count of leading zeroes in a 32-bit value.
 
-  .text
+  .section .text.__clzsi2, "ax", @progbits
   .globl __clzsi2
   .type __clzsi2, @function
 __clzsi2:

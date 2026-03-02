@@ -8,7 +8,7 @@
 ; Algorithm: byte-shuffle for multiples of 8, then bit-level rotate
 ;            for remaining 0-7 bits. Same structure as int_shift64.S.
 
-	.text
+	.section .text.__rotldi2, "ax", @progbits
 
 ; ===================================================================
 ; __rotldi2: i64 left rotate
@@ -256,6 +256,7 @@ __rotldi2:
 ; ===================================================================
 ; __rotrdi2: i64 right rotate
 ; ===================================================================
+	.section .text.__rotrdi2, "ax", @progbits
 	.globl	__rotrdi2
 	.type	__rotrdi2,@function
 __rotrdi2:

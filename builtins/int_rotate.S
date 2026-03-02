@@ -5,7 +5,7 @@
 ; __rotlsi2: left rotate i32  — [SP+2..5]=x, [SP+6]=n, returns BC:DE
 ; __rotrsi2: right rotate i32 — [SP+2..5]=x, [SP+6]=n, returns BC:DE
 
-	.text
+	.section .text.__rotlhi2, "ax", @progbits
 
 ; ===================================================================
 ; __rotlhi2: uint16_t left rotate
@@ -66,6 +66,7 @@ __rotlhi2:
 ; ===================================================================
 ; __rotrhi2: uint16_t right rotate
 ; ===================================================================
+	.section .text.__rotrhi2, "ax", @progbits
 	.globl	__rotrhi2
 	.type	__rotrhi2,@function
 __rotrhi2:
@@ -123,6 +124,7 @@ __rotrhi2:
 ; [SP+6] = n (shift amount, only low 5 bits matter)
 ; Returns BC:DE
 ; ===================================================================
+	.section .text.__rotlsi2, "ax", @progbits
 	.globl	__rotlsi2
 	.type	__rotlsi2,@function
 __rotlsi2:
@@ -228,6 +230,7 @@ __rotlsi2:
 ; [SP+2..5] = x, [SP+6] = n
 ; Returns BC:DE
 ; ===================================================================
+	.section .text.__rotrsi2, "ax", @progbits
 	.globl	__rotrsi2
 	.type	__rotrsi2,@function
 __rotrsi2:

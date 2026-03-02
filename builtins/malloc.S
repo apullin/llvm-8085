@@ -7,7 +7,7 @@
 ;; Calling convention: arg on stack at [SP+2], return in BC
 ;; ==========================================================================
 
-  .text
+  .section .text.malloc, "ax", @progbits
 
 ;; -------------------------------------------------------------------------
 ;; void *malloc(size_t size)
@@ -84,6 +84,7 @@ malloc_oom:
 ;; void free(void *ptr)
 ;; No-op for bump allocator.
 ;; -------------------------------------------------------------------------
+  .section .text.free, "ax", @progbits
   .globl free
   .globl cfree
   .type free, @function

@@ -9,7 +9,7 @@
 ;   as an i32 arg and CALL __ctzsi2. Else check high 4 bytes,
 ;   CALL __ctzsi2 and add 32. All zero: return 64.
 
-	.text
+	.section .text.__ctzdi2, "ax", @progbits
 	.globl	__ctzdi2
 	.type	__ctzdi2,@function
 __ctzdi2:

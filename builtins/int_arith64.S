@@ -34,7 +34,7 @@
 ; approach) and zero PUSH/POP PSW for carry preservation.
 ; Carry is bridged between passes via the ADI 0xFF trick.
 ; ===================================================================
-	.text
+	.section .text.__adddi3, "ax", @progbits
 	.globl	__adddi3
 	.type	__adddi3,@function
 __adddi3:
@@ -201,6 +201,7 @@ __adddi3:
 ; Performs result = a - b using an 8-byte borrow chain.
 ; Same structure as __adddi3 but with SUB/SBB instead of ADD/ADC.
 ; ===================================================================
+	.section .text.__subdi3, "ax", @progbits
 	.globl	__subdi3
 	.type	__subdi3,@function
 __subdi3:
@@ -348,6 +349,7 @@ __subdi3:
 ;
 ; Performs result = a & b, 8 bytes.
 ; ===================================================================
+	.section .text.__anddi3, "ax", @progbits
 	.globl	__anddi3
 	.type	__anddi3,@function
 __anddi3:
@@ -457,6 +459,7 @@ __anddi3:
 ;
 ; Performs result = a | b, 8 bytes.
 ; ===================================================================
+	.section .text.__ordi3, "ax", @progbits
 	.globl	__ordi3
 	.type	__ordi3,@function
 __ordi3:
@@ -566,6 +569,7 @@ __ordi3:
 ;
 ; Performs result = a ^ b, 8 bytes.
 ; ===================================================================
+	.section .text.__xordi3, "ax", @progbits
 	.globl	__xordi3
 	.type	__xordi3,@function
 __xordi3:
@@ -675,6 +679,7 @@ __xordi3:
 ; Performs result = -a = ~a + 1.
 ; Complement all 8 bytes and add 1 with carry propagation.
 ; ===================================================================
+	.section .text.__negdi2, "ax", @progbits
 	.globl	__negdi2
 	.type	__negdi2,@function
 __negdi2:
@@ -1029,6 +1034,7 @@ __negdi2:
 ; If signs differ, the negative number is smaller.
 ; If signs are the same, compare as unsigned from MSB to LSB.
 ; ===================================================================
+	.section .text.__cmpdi2, "ax", @progbits
 	.globl	__cmpdi2
 	.type	__cmpdi2,@function
 __cmpdi2:
@@ -1205,6 +1211,7 @@ __cmpdi2:
 ;
 ; Algorithm: compare bytes from MSB (byte 7) to LSB (byte 0).
 ; ===================================================================
+	.section .text.__ucmpdi2, "ax", @progbits
 	.globl	__ucmpdi2
 	.type	__ucmpdi2,@function
 __ucmpdi2:

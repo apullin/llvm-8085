@@ -21,7 +21,7 @@
 ;   [SP+3] = b (1 byte)
 ;   Returns result in A (also in C; B = 0).
 ; ===================================================================
-	.text
+	.section .text.__mul8, "ax", @progbits
 	.globl	__mul8
 	.type	__mul8,@function
 __mul8:
@@ -77,6 +77,7 @@ __mul8:
 ;   [SP+4..5] = b
 ;   Returns result in BC (B = high, C = low).
 ; ===================================================================
+	.section .text.__mul16, "ax", @progbits
 	.globl	__mul16
 	.type	__mul16,@function
 __mul16:
@@ -160,6 +161,7 @@ __mul16:
 ; then adding byte-by-byte through a stack-based result.  This
 ; saves ~9 instructions and ~78 cycles per add iteration.
 ; ===================================================================
+	.section .text.__mul32, "ax", @progbits
 	.globl	__mul32
 	.type	__mul32,@function
 __mul32:
@@ -291,6 +293,7 @@ __mul32:
 ; push/pop multiplier + two LXI+DAD SP pairs that the old
 ; stack-resident-result approach needed on every add iteration.
 ; ===================================================================
+	.section .text.__mulsi16, "ax", @progbits
 	.globl	__mulsi16
 	.type	__mulsi16,@function
 __mulsi16:
@@ -488,6 +491,7 @@ __mulsi16:
 ; Register-resident result: C=byte0, B=byte1, D=byte2.
 ; Multiplier at top of stack, accessed via XTHL.
 ; ===================================================================
+	.section .text.__mulsi16_shr8, "ax", @progbits
 	.globl	__mulsi16_shr8
 	.type	__mulsi16_shr8,@function
 __mulsi16_shr8:
@@ -668,6 +672,7 @@ __mulsi16_shr8:
 ; Multiplier at top of stack, accessed via XTHL.
 ; Same core loop as __mulsi16 but returns bytes 2-3 (E:D -> C:B).
 ; ===================================================================
+	.section .text.__mulsi16_hi16, "ax", @progbits
 	.globl	__mulsi16_hi16
 	.type	__mulsi16_hi16,@function
 __mulsi16_hi16:
@@ -857,6 +862,7 @@ __mulsi16_hi16:
 ; bits of the unsigned multiply.  No sign handling is needed!
 ; This is just __mul16 renamed.  We can skip computing bytes 2-3.
 ; ===================================================================
+	.section .text.__mulsi16_lo16, "ax", @progbits
 	.globl	__mulsi16_lo16
 	.type	__mulsi16_lo16,@function
 __mulsi16_lo16:
@@ -936,6 +942,7 @@ __mulsi16_lo16:
 ;   HL = 16-bit result accumulator
 ;   B  = multiplicand high byte (starts 0, grows as E shifts out)
 ; ===================================================================
+	.section .text.__mulsi8, "ax", @progbits
 	.globl	__mulsi8
 	.type	__mulsi8,@function
 __mulsi8:
@@ -1053,6 +1060,7 @@ __mulsi8:
 ; then extract byte 1 (B register after __mulsi8 returns in BC).
 ; For code size, we just call __mulsi8 and extract B.
 ; ===================================================================
+	.section .text.__mulsi8_hi8, "ax", @progbits
 	.globl	__mulsi8_hi8
 	.type	__mulsi8_hi8,@function
 __mulsi8_hi8:
@@ -1172,6 +1180,7 @@ __mulsi8_hi8:
 ;   multiply, no sign handling is needed.  This is just __mul8.
 ;   Returns i8 in A (also in C; B = 0).
 ; ===================================================================
+	.section .text.__mulsi8_lo8, "ax", @progbits
 	.globl	__mulsi8_lo8
 	.type	__mulsi8_lo8,@function
 __mulsi8_lo8:
@@ -1199,6 +1208,7 @@ __mulsi8_lo8:
 ;   - multiplicand = b (8 bytes on our stack, zero-extended to 64 bits,
 ;     shifts left each iteration)
 ; ===================================================================
+	.section .text.__mulsi32, "ax", @progbits
 	.globl	__mulsi32
 	.type	__mulsi32,@function
 __mulsi32:
@@ -1653,6 +1663,7 @@ __mulsi32:
 ; Strategy: same sign-handling as __mulsi32, then unsigned
 ; 32x32 shift-and-add with 6-byte result and 6-byte multiplicand.
 ; ===================================================================
+	.section .text.__mulsi32_shr16, "ax", @progbits
 	.globl	__mulsi32_shr16
 	.type	__mulsi32_shr16,@function
 __mulsi32_shr16:
@@ -2003,6 +2014,7 @@ __mulsi32_shr16:
 ; Must compute the full 64-bit product for carry accuracy.
 ; Uses same approach as __mulsi32 but returns bytes 4-7 only.
 ; ===================================================================
+	.section .text.__mulsi32_hi32, "ax", @progbits
 	.globl	__mulsi32_hi32
 	.type	__mulsi32_hi32,@function
 __mulsi32_hi32:
@@ -2361,6 +2373,7 @@ __mulsi32_hi32:
 ;   HL = 16-bit result accumulator
 ;   B  = multiplicand high byte (starts 0, grows as E shifts out)
 ; ===================================================================
+	.section .text.__mului8, "ax", @progbits
 	.globl	__mului8
 	.type	__mului8,@function
 __mului8:
@@ -2435,6 +2448,7 @@ __mului8:
 ; Optimised: result lives in BC:DE (register-resident).
 ; Multiplier at top of stack, accessed via XTHL.
 ; ===================================================================
+	.section .text.__mului16, "ax", @progbits
 	.globl	__mului16
 	.type	__mului16,@function
 __mului16:
@@ -2574,6 +2588,7 @@ __mului16:
 ;   - multiplicand = b (8 bytes on our stack, zero-extended to 64 bits,
 ;     shifts left each iteration)
 ; ===================================================================
+	.section .text.__mului32, "ax", @progbits
 	.globl	__mului32
 	.type	__mului32,@function
 __mului32:
@@ -2862,6 +2877,7 @@ __mului32:
 ; Since we only need 64 bits of product, the multiplicand only needs
 ; 8 bytes of tracking (upper bits shifted out are irrelevant).
 ; ===================================================================
+	.section .text.__muldi3, "ax", @progbits
 	.globl	__muldi3
 	.type	__muldi3,@function
 __muldi3:

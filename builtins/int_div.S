@@ -35,7 +35,7 @@
 ;   E = quotient (builds up)
 ;   L = loop counter
 ; ===================================================================
-	.text
+	.section .text.__udivmod8, "ax", @progbits
 	.globl	__udivmod8
 	.type	__udivmod8,@function
 __udivmod8:
@@ -111,6 +111,7 @@ __udivmod8:
 ; Tail-call: JMP (not CALL) so __udivmod8 sees the same stack frame.
 ; __udivmod8 returns A=quotient, C=remainder.
 ; ===================================================================
+	.section .text.__udiv8, "ax", @progbits
 	.globl	__udiv8
 	.type	__udiv8,@function
 __udiv8:
@@ -127,6 +128,7 @@ __udiv8:
 ;
 ; Load args and re-push so __udivmod8 sees them at the right offset.
 ; ===================================================================
+	.section .text.__urem8, "ax", @progbits
 	.globl	__urem8
 	.type	__urem8,@function
 __urem8:
@@ -179,6 +181,7 @@ __urem8:
 ; Strategy: determine result sign, negate inputs if needed,
 ;           call __udivmod8, fix sign of quotient.
 ; ===================================================================
+	.section .text.__sdiv8, "ax", @progbits
 	.globl	__sdiv8
 	.type	__sdiv8,@function
 __sdiv8:
@@ -295,6 +298,7 @@ __sdiv8:
 ;
 ; Strategy: same as __sdiv8 but return remainder with dividend's sign.
 ; ===================================================================
+	.section .text.__srem8, "ax", @progbits
 	.globl	__srem8
 	.type	__srem8,@function
 __srem8:
@@ -401,6 +405,7 @@ __srem8:
 ;
 ; Stack usage: 2 bytes (two sign bytes pushed)
 ; ===================================================================
+	.section .text.__sdivmod8, "ax", @progbits
 	.globl	__sdivmod8
 	.type	__sdivmod8,@function
 __sdivmod8:
@@ -524,6 +529,7 @@ __sdivmod8:
 ;
 ; We use 4 bytes of stack for dividend + counter.
 ; ===================================================================
+	.section .text.__udivmod16, "ax", @progbits
 	.globl	__udivmod16
 	.type	__udivmod16,@function
 __udivmod16:
@@ -670,6 +676,7 @@ __udivmod16:
 ;
 ; Tail-call: JMP so __udivmod16 sees the same stack frame.
 ; ===================================================================
+	.section .text.__udiv16, "ax", @progbits
 	.globl	__udiv16
 	.type	__udiv16,@function
 __udiv16:
@@ -686,6 +693,7 @@ __udiv16:
 ;
 ; Load and re-push args for __udivmod16.
 ; ===================================================================
+	.section .text.__urem16, "ax", @progbits
 	.globl	__urem16
 	.type	__urem16,@function
 __urem16:
@@ -726,6 +734,7 @@ __urem16:
 ; Strategy: determine result sign, negate inputs, unsigned divide,
 ;           fix sign.
 ; ===================================================================
+	.section .text.__sdiv16, "ax", @progbits
 	.globl	__sdiv16
 	.type	__sdiv16,@function
 __sdiv16:
@@ -829,6 +838,7 @@ __sdiv16:
 ;   [SP+4..5] = divisor (s16)
 ;   Returns: BC = remainder (sign follows dividend)
 ; ===================================================================
+	.section .text.__srem16, "ax", @progbits
 	.globl	__srem16
 	.type	__srem16,@function
 __srem16:
@@ -932,6 +942,7 @@ __srem16:
 ; Strategy: save both signs, take absolute values, call __udivmod16,
 ;           fix sign of quotient and remainder.
 ; ===================================================================
+	.section .text.__sdivmod16, "ax", @progbits
 	.globl	__sdivmod16
 	.type	__sdivmod16,@function
 __sdivmod16:
@@ -1061,6 +1072,7 @@ __sdivmod16:
 ;   Trial subtraction replaces MSB-first comparison (restoring
 ;   division: subtract, check borrow, undo if needed).
 ; ===================================================================
+	.section .text.__udivmod32, "ax", @progbits
 	.globl	__udivmod32
 	.type	__udivmod32,@function
 __udivmod32:
@@ -1279,6 +1291,7 @@ __udivmod32:
 ;
 ; Tail-call: JMP so __udivmod32 sees the same stack frame.
 ; ===================================================================
+	.section .text.__udiv32, "ax", @progbits
 	.globl	__udiv32
 	.type	__udiv32,@function
 __udiv32:
@@ -1297,6 +1310,7 @@ __udiv32:
 ;   Uses contiguous dividend+remainder layout and trial subtraction
 ;   (restoring division).
 ; ===================================================================
+	.section .text.__urem32, "ax", @progbits
 	.globl	__urem32
 	.type	__urem32,@function
 __urem32:
@@ -1472,6 +1486,7 @@ __urem32:
 ;   [SP+6..9]  = divisor (s32)
 ;   Returns: BC:DE = quotient
 ; ===================================================================
+	.section .text.__sdiv32, "ax", @progbits
 	.globl	__sdiv32
 	.type	__sdiv32,@function
 __sdiv32:
@@ -1636,6 +1651,7 @@ __sdiv32:
 ;   [SP+6..9]  = divisor (s32)
 ;   Returns: BC:DE = remainder (sign follows dividend)
 ; ===================================================================
+	.section .text.__srem32, "ax", @progbits
 	.globl	__srem32
 	.type	__srem32,@function
 __srem32:

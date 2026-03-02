@@ -24,7 +24,7 @@
 ;
 ;   Returns dst in BC.
 
-	.text
+	.section .text.memcpy, "ax", @progbits
 	.globl	memcpy
 	.type	memcpy,@function
 memcpy:
@@ -86,6 +86,7 @@ memcpy:
 	ret
 	.size	memcpy, .-memcpy
 
+	.section .text.memset, "ax", @progbits
 	.globl	memset
 	.type	memset,@function
 memset:
@@ -144,6 +145,7 @@ memset:
 	ret
 	.size	memset, .-memset
 
+	.section .text.memmove, "ax", @progbits
 	.globl	memmove
 	.type	memmove,@function
 memmove:
@@ -262,6 +264,7 @@ memmove:
 	ret
 	.size	memmove, .-memmove
 
+	.section .text.memcmp, "ax", @progbits
 	.globl	memcmp
 	.type	memcmp,@function
 memcmp:

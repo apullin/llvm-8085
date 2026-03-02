@@ -37,6 +37,7 @@
 	pop	psw		; A = count
 	ret
 
+	.section .text.__popcountsi2, "ax", @progbits
 	.globl	__popcountsi2
 	.type	__popcountsi2,@function
 __popcountsi2:
@@ -97,6 +98,7 @@ __popcountsi2:
 	ret
 	.size	__popcountsi2, .-__popcountsi2
 
+	.section .text.__popcountdi2, "ax", @progbits
 	.globl	__popcountdi2
 	.type	__popcountdi2,@function
 __popcountdi2:

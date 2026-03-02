@@ -66,6 +66,7 @@
 ; float __negsf2(float a)
 ; Flip sign bit.
 ; ============================================================
+	.section .text.__negsf2, "ax", @progbits
 	.globl	__negsf2
 	.type	__negsf2,@function
 __negsf2:
@@ -88,6 +89,7 @@ __negsf2:
 ; float __subsf3(float a, float b)
 ; Flip b's sign, then add.
 ; ============================================================
+	.section .text.__subsf3, "ax", @progbits
 	.globl	__subsf3
 	.type	__subsf3,@function
 __subsf3:
@@ -103,6 +105,7 @@ __subsf3:
 ; int __unordsf2(float a, float b)
 ; Returns nonzero if either arg is NaN.
 ; ============================================================
+	.section .text.__unordsf2, "ax", @progbits
 	.globl	__unordsf2
 	.type	__unordsf2,@function
 __unordsf2:
@@ -136,6 +139,7 @@ __unordsf2:
 ; Also: __eqsf2, __ltsf2, __nesf2, __cmpsf2
 ; Returns -1 if a<b, 0 if a==b, +1 if a>b or unordered(NaN).
 ; ============================================================
+	.section .text.__lesf2, "ax", @progbits
 	.globl	__lesf2
 	.globl	__eqsf2
 	.globl	__ltsf2
@@ -180,6 +184,7 @@ __cmpsf2:
 ; Also: __gtsf2
 ; Returns -1 if a<b or unordered(NaN), 0 if a==b, +1 if a>b.
 ; ============================================================
+	.section .text.__gesf2, "ax", @progbits
 	.globl	__gesf2
 	.globl	__gtsf2
 	.type	__gesf2,@function
@@ -337,6 +342,7 @@ __gtsf2:
 ; uint32_t __fixunssfsi(float a)
 ; float -> unsigned int32.  Negative -> 0, overflow -> 0xFFFFFFFF.
 ; ============================================================
+	.section .text.__fixunssfsi, "ax", @progbits
 	.globl	__fixunssfsi
 	.type	__fixunssfsi,@function
 __fixunssfsi:
@@ -481,6 +487,7 @@ __fixunssfsi:
 ; int32_t __fixsfsi(float a)
 ; float -> signed int32.
 ; ============================================================
+	.section .text.__fixsfsi, "ax", @progbits
 	.globl	__fixsfsi
 	.type	__fixsfsi,@function
 __fixsfsi:
@@ -584,6 +591,7 @@ __fixsfsi:
 ; float __floatunsisf(uint32_t a)
 ; unsigned int32 -> float
 ; ============================================================
+	.section .text.__floatunsisf, "ax", @progbits
 	.globl	__floatunsisf
 	.type	__floatunsisf,@function
 __floatunsisf:
@@ -893,6 +901,7 @@ __floatunsisf:
 ; float __floatsisf(int32_t a)
 ; signed int32 -> float
 ; ============================================================
+	.section .text.__floatsisf, "ax", @progbits
 	.globl	__floatsisf
 	.type	__floatsisf,@function
 __floatsisf:
@@ -965,6 +974,7 @@ __floatsisf:
 ; ============================================================
 ; FP environment stubs
 ; ============================================================
+	.section .text.__fe_getround, "ax", @progbits
 	.globl	__fe_getround
 	.type	__fe_getround,@function
 __fe_getround:
@@ -972,6 +982,7 @@ __fe_getround:
 	ret
 	.size	__fe_getround, .-__fe_getround
 
+	.section .text.__fe_raise_inexact, "ax", @progbits
 	.globl	__fe_raise_inexact
 	.type	__fe_raise_inexact,@function
 __fe_raise_inexact:
@@ -992,6 +1003,7 @@ __fe_raise_inexact:
 ;   [SP+10..11] = (pad to keep even)
 ; Original args at [SP+12..19] after allocating scratch.
 ; ============================================================
+	.section .text.__addsf3, "ax", @progbits
 	.globl	__addsf3
 	.type	__addsf3,@function
 __addsf3:
@@ -1626,6 +1638,7 @@ __addsf3:
 ;   [SP+15]     = pad
 ; Args at [SP+18..25] after 16 bytes scratch + 2 ret addr.
 ; ============================================================
+	.section .text.__mulsf3, "ax", @progbits
 	.globl	__mulsf3
 	.type	__mulsf3,@function
 __mulsf3:
@@ -2136,6 +2149,7 @@ __mulsf3:
 ;   [SP+12..15] = pad
 ; Args at [SP+18..25].
 ; ============================================================
+	.section .text.__divsf3, "ax", @progbits
 	.globl	__divsf3
 	.type	__divsf3,@function
 __divsf3:

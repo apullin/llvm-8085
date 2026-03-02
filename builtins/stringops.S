@@ -20,7 +20,7 @@
 ;     [SP+5] = s2 high
 ;     Returns int (16-bit) in BC: <0 if s1<s2, 0 if equal, >0 if s1>s2.
 
-	.text
+	.section .text.strlen, "ax", @progbits
 
 ; ============================================================
 ; size_t strlen(const char *s)
@@ -60,6 +60,7 @@ strlen:
 ; ============================================================
 ; int strcmp(const char *s1, const char *s2)
 ; ============================================================
+	.section .text.strcmp, "ax", @progbits
 	.globl	strcmp
 	.type	strcmp,@function
 strcmp:
@@ -130,6 +131,7 @@ strcmp:
 ;   [SP+6] = length (size_t, 16-bit)
 ;   Returns pointer in BC (NULL=0 if not found)
 ; ============================================================
+	.section .text.memchr, "ax", @progbits
 	.globl	memchr
 	.type	memchr,@function
 memchr:

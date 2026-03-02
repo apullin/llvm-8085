@@ -9,7 +9,7 @@
 ;   compute CTZ of that byte, add byte_index * 8.
 ;   If all zero, return 32.
 
-	.text
+	.section .text.__ctzsi2, "ax", @progbits
 	.globl	__ctzsi2
 	.type	__ctzsi2,@function
 __ctzsi2:

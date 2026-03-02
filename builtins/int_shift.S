@@ -11,7 +11,7 @@
 ; ===================================================================
 ; __ashlsi3: i32 left shift
 ; ===================================================================
-	.text
+	.section .text.__ashlsi3, "ax", @progbits
 	.globl	__ashlsi3
 	.type	__ashlsi3,@function
 __ashlsi3:
@@ -96,6 +96,7 @@ __ashlsi3:
 ; ===================================================================
 ; __lshrsi3: i32 logical right shift
 ; ===================================================================
+	.section .text.__lshrsi3, "ax", @progbits
 	.globl	__lshrsi3
 	.type	__lshrsi3,@function
 __lshrsi3:
@@ -180,6 +181,7 @@ __lshrsi3:
 ; ===================================================================
 ; __ashrsi3: i32 arithmetic right shift
 ; ===================================================================
+	.section .text.__ashrsi3, "ax", @progbits
 	.globl	__ashrsi3
 	.type	__ashrsi3,@function
 __ashrsi3:

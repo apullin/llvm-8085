@@ -10,7 +10,7 @@
 ;   [SP+2..5] = hi, [SP+6..9] = lo, [SP+10] = n
 ;   Returns BC:DE
 
-	.text
+	.section .text.__fshlsi3, "ax", @progbits
 
 ; ===================================================================
 ; __fshlsi3: funnel shift left i32
@@ -342,6 +342,7 @@ __fshlsi3:
 ;   result = (hi << (32-n)) | (lo >> n)
 ;   Treat as 8-byte buffer [lo,hi], shift RIGHT by n, take lower 4 bytes.
 ; ===================================================================
+	.section .text.__fshrsi3, "ax", @progbits
 	.globl	__fshrsi3
 	.type	__fshrsi3,@function
 __fshrsi3:

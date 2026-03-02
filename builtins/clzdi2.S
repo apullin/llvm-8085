@@ -9,7 +9,7 @@
 ;   push them as an i32 arg and CALL __clzsi2. Else check low 4 bytes,
 ;   CALL __clzsi2 and add 32. All zero: return 64.
 
-	.text
+	.section .text.__clzdi2, "ax", @progbits
 	.globl	__clzdi2
 	.type	__clzdi2,@function
 __clzdi2:

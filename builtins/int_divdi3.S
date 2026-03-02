@@ -48,7 +48,7 @@
 ;
 ; Total local allocation: 25 bytes (padded to 26 for alignment)
 ; ===================================================================
-	.text
+	.section .text.__udivmoddi4, "ax", @progbits
 	.globl	__udivmoddi4
 	.type	__udivmoddi4,@function
 __udivmoddi4:
@@ -625,6 +625,7 @@ __udivmoddi4:
 ;
 ; Wrapper: calls __udivmoddi4 with NULL rem pointer.
 ; ===================================================================
+	.section .text.__udivdi3, "ax", @progbits
 	.globl	__udivdi3
 	.type	__udivdi3,@function
 __udivdi3:
@@ -716,6 +717,7 @@ __udivdi3:
 ;
 ; Calls __udivmoddi4 with sret as rem pointer, and a temp as quotient.
 ; ===================================================================
+	.section .text.__umoddi3, "ax", @progbits
 	.globl	__umoddi3
 	.type	__umoddi3,@function
 __umoddi3:
@@ -859,6 +861,7 @@ __umoddi3:
 ; Strategy: determine sign of result, make both operands positive,
 ; call __udivdi3, negate result if needed.
 ; ===================================================================
+	.section .text.__divdi3, "ax", @progbits
 	.globl	__divdi3
 	.type	__divdi3,@function
 __divdi3:
@@ -1134,6 +1137,7 @@ __divdi3:
 ; Make both operands positive, call __umoddi3, negate result
 ; if dividend was negative.
 ; ===================================================================
+	.section .text.__moddi3, "ax", @progbits
 	.globl	__moddi3
 	.type	__moddi3,@function
 __moddi3:
