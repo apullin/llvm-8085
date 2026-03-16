@@ -16,3 +16,6 @@
 [submodule "picolibc-i8085/picolibc-src"]
 	path = picolibc-i8085/picolibc-src
 	url = https://github.com/picolibc/picolibc
+[submodule "tooling/picojvm"]
+	path = tooling/picojvm
+	url = git@github.com:apullin/picojvm.git
