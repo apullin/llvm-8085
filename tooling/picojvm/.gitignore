@@ -1,5 +1,0 @@
-picojvm
-build/
-tests/*.class
-tests/*.pjvm
-tests/*.pjvmmap

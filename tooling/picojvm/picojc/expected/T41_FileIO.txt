@@ -1,3 +1,0 @@
-Hello File IO
-Bytes: 13
-OK
