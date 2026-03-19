@@ -110,6 +110,8 @@ static volatile uint16_t d16_a1 = 50000u, d16_b1 = 123u;
 static volatile uint16_t d16_a2 = 65535u, d16_b2 = 256u;
 static volatile int16_t  d16_sa1 = -30000, d16_sb1 = 123;
 static volatile int16_t  d16_sa2 = 30000, d16_sb2 = -123;
+static volatile uint16_t d16_c1 = 0u, d16_c2 = 26u;
+static volatile uint8_t  d16_cv1 = 3u, d16_cv2 = 13u;
 
 __attribute__((noinline))
 static uint8_t test_div16(void) {
@@ -147,6 +149,72 @@ static uint8_t test_div16(void) {
     store16(p, (uint16_t)sr); p += 2;
     if (sq != -243) ok = 0;
     if (sr != 111) ok = 0;
+
+    return ok;
+}
+
+/* ------------------------------------------------------------ */
+/* 16-bit constant-divisor regression tests                      */
+/* Exercises the optimizer path where the divisor is a literal   */
+/* while the dividend remains runtime data.                      */
+/* ------------------------------------------------------------ */
+__attribute__((noinline))
+static uint8_t test_div16_const(void) {
+    volatile uint8_t *p = out + 32;
+    uint8_t ok = 1;
+    uint8_t q_const, r_const, q_var, r_var;
+
+    q_const = (uint8_t)(d16_c1 / 3u);
+    r_const = (uint8_t)(d16_c1 % 3u);
+    q_var = (uint8_t)(d16_c1 / d16_cv1);
+    r_var = (uint8_t)(d16_c1 % d16_cv1);
+    store8(p, q_const); p += 1;
+    store8(p, r_const); p += 1;
+    store8(p, q_var); p += 1;
+    store8(p, r_var); p += 1;
+    if (q_const != 0) ok = 0;
+    if (r_const != 0) ok = 0;
+    if (q_var != 0) ok = 0;
+    if (r_var != 0) ok = 0;
+
+    q_const = (uint8_t)(d16_c2 / 3u);
+    r_const = (uint8_t)(d16_c2 % 3u);
+    q_var = (uint8_t)(d16_c2 / d16_cv1);
+    r_var = (uint8_t)(d16_c2 % d16_cv1);
+    store8(p, q_const); p += 1;
+    store8(p, r_const); p += 1;
+    store8(p, q_var); p += 1;
+    store8(p, r_var); p += 1;
+    if (q_const != 8) ok = 0;
+    if (r_const != 2) ok = 0;
+    if (q_var != 8) ok = 0;
+    if (r_var != 2) ok = 0;
+
+    q_const = (uint8_t)(d16_c1 / 13u);
+    r_const = (uint8_t)(d16_c1 % 13u);
+    q_var = (uint8_t)(d16_c1 / d16_cv2);
+    r_var = (uint8_t)(d16_c1 % d16_cv2);
+    store8(p, q_const); p += 1;
+    store8(p, r_const); p += 1;
+    store8(p, q_var); p += 1;
+    store8(p, r_var); p += 1;
+    if (q_const != 0) ok = 0;
+    if (r_const != 0) ok = 0;
+    if (q_var != 0) ok = 0;
+    if (r_var != 0) ok = 0;
+
+    q_const = (uint8_t)(d16_c2 / 13u);
+    r_const = (uint8_t)(d16_c2 % 13u);
+    q_var = (uint8_t)(d16_c2 / d16_cv2);
+    r_var = (uint8_t)(d16_c2 % d16_cv2);
+    store8(p, q_const); p += 1;
+    store8(p, r_const); p += 1;
+    store8(p, q_var); p += 1;
+    store8(p, r_var); p += 1;
+    if (q_const != 2) ok = 0;
+    if (r_const != 0) ok = 0;
+    if (q_var != 2) ok = 0;
+    if (r_var != 0) ok = 0;
 
     return ok;
 }
@@ -477,6 +545,7 @@ int main(void) {
 
     if (!test_div8()) ok = 0;
     if (!test_div16()) ok = 0;
+    if (!test_div16_const()) ok = 0;
     if (!test_div32()) ok = 0;
     if (!test_shift64()) ok = 0;
     if (!test_addsub64()) ok = 0;
