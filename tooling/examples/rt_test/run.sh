@@ -41,6 +41,7 @@ TESTS=(
     rt_test_float_arith
     rt_test_float_conv
     rt_test_arith64
+    rt_test_helper_abi
 )
 
 # Max simulator steps per test
@@ -50,6 +51,7 @@ MAX_STEPS[rt_test_divsi3]=50000000
 MAX_STEPS[rt_test_float_arith]=20000000
 MAX_STEPS[rt_test_float_conv]=20000000
 MAX_STEPS[rt_test_arith64]=100000000
+MAX_STEPS[rt_test_helper_abi]=100000000
 
 BUILDDIR="${SCRIPT_DIR}/build/${OPT}"
 mkdir -p "${BUILDDIR}"
