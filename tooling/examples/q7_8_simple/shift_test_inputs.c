@@ -1,5 +1,7 @@
 // Test input: 0x0200 (512) should give count=10 (2^9 = 512, needs 10 shifts)
-__attribute__((used, section(".input")))
-const unsigned char input_data[] = {
-    0x00, 0x02,  // val = 0x0200 = 512
+#include <stdint.h>
+
+__attribute__((section(".input")))
+const uint16_t shift_test_input[1] = {
+    0x0200,  // val = 0x0200 = 512
 };

@@ -1,11 +1,12 @@
 #include <stdint.h>
 
 // Minimal test: count how many times we can right-shift until zero
-// Input: 16-bit value at 0x0100
+// Input: 16-bit value in shift_test_input, linked at 0x0100
 // Output: count at 0x0200
 
 int main(void) {
-    uint16_t val = *(volatile uint16_t *)0x0100;
+    extern const uint16_t shift_test_input[1];
+    uint16_t val = shift_test_input[0];
     uint16_t count = 0;
 
     while (val) {

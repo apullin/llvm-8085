@@ -5,8 +5,9 @@ static int16_t q7_8_mul(int16_t a, int16_t b) {
 }
 
 int main(void) {
-    const int16_t *A = (const int16_t *)0x0100;
-    const int16_t *B = (const int16_t *)0x0108;
+    extern const int16_t q7_8_inputs[8];
+    const int16_t *A = q7_8_inputs;
+    const int16_t *B = q7_8_inputs + 4;
     volatile int16_t *C = (volatile int16_t *)0x0200;
 
     int16_t a0 = A[0];

@@ -3,7 +3,7 @@
  *
  * Exercises hand-written strlen and strcmp with various inputs.
  *
- * Input layout (32 bytes at 0x0100):
+ * Input layout (32 bytes in string_torture_input, linked at 0x0100):
  *   +0:  "Hello"   (len 5)
  *   +6:  "Hello"   (duplicate)
  *   +12: "Hellp"   (last-char differs)
@@ -22,7 +22,6 @@ typedef unsigned int size_t;
 size_t strlen(const char *s);
 int strcmp(const char *s1, const char *s2);
 
-#define INPUT_ADDR  0x0100
 #define OUTPUT_ADDR 0x0200
 
 #define TOTAL_TESTS 12
@@ -33,13 +32,15 @@ __attribute__((noinline)) static void fail_loop(void) {
     }
 }
 
+extern const char string_torture_input[32];
+
 int main(void) {
-    const char *hello1 = (const char *)(INPUT_ADDR + 0);   /* "Hello" */
-    const char *hello2 = (const char *)(INPUT_ADDR + 6);   /* "Hello" */
-    const char *hellp  = (const char *)(INPUT_ADDR + 12);  /* "Hellp" */
-    const char *hel    = (const char *)(INPUT_ADDR + 18);  /* "Hel" */
-    const char *world  = (const char *)(INPUT_ADDR + 22);  /* "World!" */
-    const char *empty  = (const char *)(INPUT_ADDR + 29);  /* "" */
+    const char *hello1 = string_torture_input + 0;   /* "Hello" */
+    const char *hello2 = string_torture_input + 6;   /* "Hello" */
+    const char *hellp  = string_torture_input + 12;  /* "Hellp" */
+    const char *hel    = string_torture_input + 18;  /* "Hel" */
+    const char *world  = string_torture_input + 22;  /* "World!" */
+    const char *empty  = string_torture_input + 29;  /* "" */
 
     volatile uint32_t *output = (volatile uint32_t *)OUTPUT_ADDR;
 

@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 // Single Q7.8 fixed-point multiply
-// Input: two Q7.8 values at 0x0100 and 0x0102
+// Input: two Q7.8 values in q7_8_simple_input, linked at 0x0100 and 0x0102
 // Output: result at 0x0200
 
 static int16_t q7_8_mul(int16_t a, int16_t b) {
@@ -34,8 +34,9 @@ static int16_t q7_8_mul(int16_t a, int16_t b) {
 }
 
 int main(void) {
-    int16_t a = *(volatile int16_t *)0x0100;
-    int16_t b = *(volatile int16_t *)0x0102;
+    extern const int16_t q7_8_simple_input[2];
+    int16_t a = q7_8_simple_input[0];
+    int16_t b = q7_8_simple_input[1];
 
     int16_t result = q7_8_mul(a, b);
 

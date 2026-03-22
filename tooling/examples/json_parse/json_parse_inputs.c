@@ -10,5 +10,5 @@
 
 #include <stdint.h>
 
-__attribute__((used, section(".input")))
+__attribute__((section(".input")))
 const char json_input[48] = "{\"name\":\"i8085\",\"bits\":8,\"year\":1977}";

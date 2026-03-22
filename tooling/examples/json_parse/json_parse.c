@@ -5,7 +5,7 @@
  * Exercises string processing, byte scanning, comparisons, control flow,
  * and pointer arithmetic.
  *
- * Input:  JSON string loaded from 0x0100 (up to 48 bytes, null-terminated)
+ * Input:  json_input linked at 0x0100 (up to 48 bytes, null-terminated)
  * Output: token count (uint16_t) at 0x0200, "bits" value (uint16_t) at 0x0202
  *
  * Test string: {"name":"i8085","bits":8,"year":1977}
@@ -15,7 +15,6 @@
 
 #include <stdint.h>
 
-#define INPUT_ADDR   0x0100
 #define OUTPUT_ADDR  0x0200
 #define MAX_TOKENS   16
 #define INPUT_MAX    48
@@ -177,9 +176,11 @@ __attribute__((noinline)) static void fail_loop(void) {
     }
 }
 
+extern const char json_input[INPUT_MAX];
+
 __attribute__((optnone))
 int main(void) {
-    const char *json = (const char *)INPUT_ADDR;
+    const char *json = json_input;
     volatile uint16_t *out_token_count = (volatile uint16_t *)OUTPUT_ADDR;
     volatile uint16_t *out_bits_value  = (volatile uint16_t *)(OUTPUT_ADDR + 2);
 

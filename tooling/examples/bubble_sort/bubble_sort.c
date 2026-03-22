@@ -5,7 +5,7 @@
  * Exercises 16-bit signed comparisons, swaps, nested loops,
  * and memory load/store patterns.
  *
- * Input:  16 x int16_t at 0x0100 (32 bytes)
+ * Input:  16 x int16_t in bubble_sort_input, linked at 0x0100 (32 bytes)
  * Output: sorted array at 0x0200 (32 bytes)
  *
  * Verification: checks that first element == -32768 (0x8000)
@@ -14,7 +14,6 @@
 
 #include <stdint.h>
 
-#define INPUT_ADDR   0x0100
 #define OUTPUT_ADDR  0x0200
 #define ARRAY_LEN    16
 
@@ -27,8 +26,10 @@ __attribute__((noinline)) static void fail_loop(void) {
     }
 }
 
+extern const int16_t bubble_sort_input[ARRAY_LEN];
+
 int main(void) {
-    const int16_t *input = (const int16_t *)INPUT_ADDR;
+    const int16_t *input = bubble_sort_input;
     volatile int16_t *output = (volatile int16_t *)OUTPUT_ADDR;
 
     /* Copy input to a local working array */

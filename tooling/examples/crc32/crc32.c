@@ -1,8 +1,8 @@
 /*
  * CRC32 benchmark for i8085
  *
- * Computes CRC32 (ISO 3309 / ITU-T V.42) over a 32-byte buffer loaded
- * from external memory at 0x0100.  Uses the bit-by-bit algorithm (no
+ * Computes CRC32 (ISO 3309 / ITU-T V.42) over a 32-byte buffer placed
+ * in the fixed .input window at 0x0100. Uses the bit-by-bit algorithm (no
  * lookup table) to keep code size small while exercising 32-bit shifts,
  * XOR, and byte processing.
  *
@@ -12,7 +12,6 @@
 
 #include <stdint.h>
 
-#define INPUT_ADDR   0x0100
 #define OUTPUT_ADDR  0x0200
 #define INPUT_LEN    32
 
@@ -28,6 +27,8 @@ __attribute__((noinline)) static void fail_loop(void) {
     }
 }
 
+extern const uint8_t crc32_input[INPUT_LEN];
+
 static uint32_t crc32_byte(uint32_t crc, uint8_t byte) {
     crc ^= (uint32_t)byte;
     for (uint8_t bit = 0; bit < 8; bit++) {
@@ -41,7 +42,7 @@ static uint32_t crc32_byte(uint32_t crc, uint8_t byte) {
 }
 
 int main(void) {
-    const uint8_t *input = (const uint8_t *)INPUT_ADDR;
+    const uint8_t *input = crc32_input;
     volatile uint32_t *output = (volatile uint32_t *)OUTPUT_ADDR;
 
     uint32_t crc = 0xFFFFFFFFu;

@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-__attribute__((used, section(".input")))
+__attribute__((section(".input")))
 const int16_t q7_8_inputs[8] = {
     0x0100, 0x0080, // A: 1.0, 0.5
     0xFF00, 0x0200, // A: -1.0, 2.0
