@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 
-__attribute__((section(".input")))
+__attribute__((used, section(".input")))
 const int16_t bubble_sort_input[16] = {
     1024, -512, 32767, -32768,
     0,    255,  -1,    100,

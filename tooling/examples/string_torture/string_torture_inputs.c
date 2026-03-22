@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-__attribute__((section(".input")))
+__attribute__((used, section(".input")))
 const char string_torture_input[32] = {
     'H','e','l','l','o','\0',           /* offset 0: "Hello" */
     'H','e','l','l','o','\0',           /* offset 6: "Hello" (dup) */
