@@ -20,6 +20,13 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from i8085_cost_model import (
+    Cost,
+    estimated_reload_cost_16,
+    estimated_spill_cost_16,
+    pseudo_choice_cost,
+)
+
 
 BUBBLE_MIR_PATH = Path(".tmp/bubble_sort_pre_ra.mir")
 FIB_MIR_PATH = Path(".tmp/fib_pre_ra.mir")
@@ -310,42 +317,16 @@ def pseudo_cost(
     use_pos: int,
     physreg: str,
     has_later_use: bool,
-) -> int | None:
-    # None means "illegal in this simplified local model".
-    if opcode == "LOAD_8_ADDR_CONTENT" and use_pos == 0:
-        if physreg == "HL":
-            return 0
-        if physreg in ("BC", "DE"):
-            return 1
-    if opcode == "LOAD_16_ADDR_CONTENT" and use_pos == 0:
-        if physreg == "HL":
-            return 0
-        if physreg in ("BC", "DE"):
-            return 1
-    if opcode == "STORE_8_ADDR_CONTENT" and use_pos == 0:
-        if physreg == "HL":
-            return 0
-        if physreg in ("BC", "DE"):
-            return 1
-    if opcode == "STORE_16_ADDR_CONTENT" and use_pos == 0:
-        if physreg == "HL":
-            return None if has_later_use else 0
-        if physreg in ("BC", "DE"):
-            return 1
-    if opcode == "LOAD_32_ADDR_CONTENT" and use_pos == 0:
-        if physreg == "HL":
-            return None if has_later_use else 2
-        if physreg in ("BC", "DE"):
-            return 0
-    return 0
+) -> Cost | None:
+    return pseudo_choice_cost(opcode, use_pos, physreg, has_later_use)
 
 
 def oracle_penalty(
     parsed: dict[int, list[dict[str, object]]],
     live_after: dict[tuple[int, int], set[int]],
     assign: dict[int, str],
-) -> int | None:
-    total = 0
+) -> Cost | None:
+    total = Cost()
     for b, ins in parsed.items():
         for i, item in enumerate(ins):
             opcode = item["opcode"]  # type: ignore[assignment]
@@ -367,8 +348,8 @@ def oracle_breakdown(
     parsed: dict[int, list[dict[str, object]]],
     live_after: dict[tuple[int, int], set[int]],
     assign: dict[int, str],
-) -> list[tuple[int, str, int, str, int, bool]]:
-    rows: list[tuple[int, str, int, str, int, bool]] = []
+) -> list[tuple[int, str, int, str, int, int, bool]]:
+    rows: list[tuple[int, str, int, str, int, int, bool]] = []
     for b, ins in parsed.items():
         for i, item in enumerate(ins):
             opcode = item["opcode"]  # type: ignore[assignment]
@@ -381,7 +362,7 @@ def oracle_breakdown(
                 has_later_use = u in live_after[(b, i)]
                 cost = pseudo_cost(opcode, use_positions[u], physreg, has_later_use)
                 if cost:
-                    rows.append((b, opcode, u, physreg, cost, has_later_use))
+                    rows.append((b, opcode, u, physreg, cost.bytes, cost.tstates, has_later_use))
     return rows
 
 
@@ -594,19 +575,34 @@ def exact_color(
         key=lambda n: (len(domains[n]), len(graph[n]), use_count[n]),
         reverse=True,
     )
-    best_cost = 10**9
+    best_cost: tuple[int, int, int] | None = None
     best_assign: dict[int, str] | None = None
 
-    def search(i: int, assign: dict[int, str], cost: int):
+    spill_store = estimated_spill_cost_16()
+    spill_reload = estimated_reload_cost_16()
+
+    def search(
+        i: int,
+        assign: dict[int, str],
+        spill_count: int,
+        spill_bytes: int,
+        spill_tstates: int,
+    ):
         nonlocal best_cost, best_assign
-        if cost >= best_cost:
-            return
+        if best_cost is not None:
+            prefix = (spill_count, spill_bytes, spill_tstates)
+            if prefix > best_cost:
+                return
         if i == len(order):
             penalty = oracle_penalty(parsed, live_after, assign)
             if penalty is None:
                 return
-            total = cost + penalty
-            if total < best_cost:
+            total = (
+                spill_count,
+                spill_bytes + penalty.bytes,
+                spill_tstates + penalty.tstates,
+            )
+            if best_cost is None or total < best_cost:
                 best_cost = total
                 best_assign = assign.copy()
             return
@@ -619,13 +615,20 @@ def exact_color(
         for reg in domains[node]:
             if reg not in used:
                 assign[node] = reg
-                search(i + 1, assign, cost)
+                search(i + 1, assign, spill_count, spill_bytes, spill_tstates)
                 del assign[node]
         assign[node] = "SPILL"
-        search(i + 1, assign, cost + use_count[node])
+        uses = use_count[node]
+        search(
+            i + 1,
+            assign,
+            spill_count + uses,
+            spill_bytes + spill_store.bytes + uses * spill_reload.bytes,
+            spill_tstates + spill_store.tstates + uses * spill_reload.tstates,
+        )
         del assign[node]
 
-    search(0, {}, 0)
+    search(0, {}, 0, 0, 0)
     return order, best_cost, best_assign
 
 
@@ -667,13 +670,16 @@ def run_case(case: ProbeCase, top_slots: int) -> None:
         print(f"    %{n}: {sorted(graph[n])}")
     print(f"  use_count: {use_count}")
     print(f"  search order: {order}")
-    print(f"  best total cost: {best_cost}")
+    print(
+        "  best total cost: "
+        f"spills={best_cost[0]} bytes={best_cost[1]} tstates={best_cost[2]}"
+    )
     print(f"  best assignment: {best_assign}")
     if breakdown:
         print("  oracle penalties:")
-        for b, opcode, u, physreg, cost, later in breakdown:
+        for b, opcode, u, physreg, bytes_, tstates, later in breakdown:
             print(
-                f"    bb.{b} {opcode} uses %{u} in {physreg}: +{cost}"
+                f"    bb.{b} {opcode} uses %{u} in {physreg}: +{bytes_}B/+{tstates}T"
                 f" (live-after={later})"
             )
     print_hint_votes(hint_votes)

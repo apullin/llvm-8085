@@ -238,12 +238,32 @@ def solve_case(case: SolveCase) -> None:
                 )
             )
 
-    total_terms = []
+    spill_terms = []
+    byte_terms = []
+    tstate_terms = []
+
+    spill_store = probe.estimated_spill_cost_16()
+    spill_reload = probe.estimated_reload_cost_16()
 
     # Spill cost.
     for reg, var in vars_by_reg.items():
-        total_terms.append(
+        spill_terms.append(
             If(var == CHOICE_INDEX[SPILL], use_count[reg], 0)
+        )
+        spill_uses = use_count[reg]
+        byte_terms.append(
+            If(
+                var == CHOICE_INDEX[SPILL],
+                spill_store.bytes + spill_uses * spill_reload.bytes,
+                0,
+            )
+        )
+        tstate_terms.append(
+            If(
+                var == CHOICE_INDEX[SPILL],
+                spill_store.tstates + spill_uses * spill_reload.tstates,
+                0,
+            )
         )
 
     # Pseudo-expansion penalties and illegal combinations.
@@ -261,10 +281,17 @@ def solve_case(case: SolveCase) -> None:
                     if cost is None:
                         opt.add(var != idx)
                     elif cost:
-                        total_terms.append(If(var == idx, cost, 0))
+                        if cost.bytes:
+                            byte_terms.append(If(var == idx, cost.bytes, 0))
+                        if cost.tstates:
+                            tstate_terms.append(If(var == idx, cost.tstates, 0))
 
-    total = sum(total_terms)
-    h = opt.minimize(total)
+    spill_total = sum(spill_terms)
+    byte_total = sum(byte_terms) if byte_terms else 0
+    tstate_total = sum(tstate_terms) if tstate_terms else 0
+    h_spill = opt.minimize(spill_total)
+    h_bytes = opt.minimize(byte_total)
+    h_tstates = opt.minimize(tstate_total)
     if opt.check() != sat:
         raise RuntimeError(f"unsat: {case.key}")
 
@@ -273,17 +300,22 @@ def solve_case(case: SolveCase) -> None:
         reg: ALL_CHOICES[model.eval(var).as_long()]
         for reg, var in vars_by_reg.items()
     }
-    best_cost = opt.lower(h)
+    best_spills = opt.lower(h_spill)
+    best_bytes = opt.lower(h_bytes)
+    best_tstates = opt.lower(h_tstates)
     breakdown = probe.oracle_breakdown(parsed, live_after, assignment)
     print(f"Case: {case.key} - {case.title}")
     print(f"  region vars: {len(case.model.interesting)}")
-    print(f"  z3 total cost: {best_cost}")
+    print(
+        "  z3 total cost: "
+        f"spills={best_spills} bytes={best_bytes} tstates={best_tstates}"
+    )
     print(f"  z3 assignment: {assignment}")
     if breakdown:
         print("  z3 oracle penalties:")
-        for b, opcode, u, physreg, cost, later in breakdown:
+        for b, opcode, u, physreg, bytes_, tstates, later in breakdown:
             print(
-                f"    bb.{b} {opcode} uses %{u} in {physreg}: +{cost} "
+                f"    bb.{b} {opcode} uses %{u} in {physreg}: +{bytes_}B/+{tstates}T "
                 f"(live-after={later})"
             )
     if len(case.model.interesting) <= 18:
@@ -293,7 +325,11 @@ def solve_case(case: SolveCase) -> None:
         print(f"  brute-force total cost: {brute_cost}")
         print(f"  brute-force assignment: {brute_assign}")
         print(f"  brute-force order: {brute_order}")
-        same_cost = int(str(best_cost)) == brute_cost
+        same_cost = (
+            int(str(best_spills)) == brute_cost[0]
+            and int(str(best_bytes)) == brute_cost[1]
+            and int(str(best_tstates)) == brute_cost[2]
+        )
         same_assignment = assignment == brute_assign
         print(f"  parity(cost): {same_cost}")
         print(f"  parity(assignment): {same_assignment}")
