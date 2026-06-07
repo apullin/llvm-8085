@@ -40,7 +40,7 @@ git submodule update --init
 cd llvm-project
 mkdir build-clang-8085 && cd build-clang-8085
 cmake -G Ninja \
-  -DLLVM_TARGETS_TO_BUILD="I8085" \
+  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="I8085" \
   -DLLVM_ENABLE_PROJECTS="clang;lld" \
   -DCMAKE_BUILD_TYPE=Release \
   ../llvm
